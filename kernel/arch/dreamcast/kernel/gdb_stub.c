@@ -10,6 +10,8 @@
 
      Modifications for the SH by Ben Lee and Steve Chamberlain
 
+     Modifications for KOS by Dan Potter (earlier) and Richard Moats (more
+     recently).
 */
 
 /****************************************************************************
@@ -192,7 +194,7 @@
 /*
  * Number of bytes for registers
  */
-#define NUMREGBYTES	92
+#define NUMREGBYTES	41*4
 
 /*
  * typedef
@@ -227,9 +229,35 @@ static int remote_debug;
 enum regnames
   {
     R0, R1, R2, R3, R4, R5, R6, R7,
-    R8, R9, R10, R11, R12, R13, R14,
-    R15, PC, PR, GBR, VBR, MACH, MACL, SR
+    R8, R9, R10, R11, R12, R13, R14, R15,
+    PC, PR, GBR, VBR, MACH, MACL, SR,
+    FPUL, FPSCR,
+    FR0, FR1, FR2, FR3, FR4, FR5, FR6, FR7,
+    FR8, FR9, FR10, FR11, FR12, FR13, FR14, FR15
   };
+
+/* map from KOS register context order to GDB sh4 order */
+
+#define KOS_REG( r ) ( ((uint32)&((irq_context_t*)0)->r) / sizeof(uint32) )
+
+static uint32 kosRegMap[] =
+{
+  KOS_REG( r[0] ), KOS_REG( r[1] ), KOS_REG( r[2] ), KOS_REG( r[3] ),
+  KOS_REG( r[4] ), KOS_REG( r[5] ), KOS_REG( r[6] ), KOS_REG( r[7] ),
+  KOS_REG( r[8] ), KOS_REG( r[9] ), KOS_REG( r[10] ), KOS_REG( r[11] ),
+  KOS_REG( r[12] ), KOS_REG( r[13] ), KOS_REG( r[14] ), KOS_REG( r[15] ),
+
+  KOS_REG( pc ), KOS_REG( pr ), KOS_REG( gbr ), KOS_REG( vbr ),
+  KOS_REG( mach ), KOS_REG( macl ), KOS_REG( sr ),
+  KOS_REG( fpul ), KOS_REG( fpscr ),
+
+  KOS_REG( fr[0] ), KOS_REG( fr[1] ), KOS_REG( fr[2] ), KOS_REG( fr[3] ),
+  KOS_REG( fr[4] ), KOS_REG( fr[5] ), KOS_REG( fr[6] ), KOS_REG( fr[7] ),
+  KOS_REG( fr[8] ), KOS_REG( fr[9] ), KOS_REG( fr[10] ), KOS_REG( fr[11] ),
+  KOS_REG( fr[12] ), KOS_REG( fr[13] ), KOS_REG( fr[14] ), KOS_REG( fr[15] )
+};
+
+#undef KOS_REG
 
 typedef struct
   {
@@ -652,12 +680,24 @@ gdb_handle_exception (int exceptionVector)
 	case 'd':
 	  remote_debug = !(remote_debug);	/* toggle debug flag */
 	  break;
+
 	case 'g':		/* return the value of the CPU registers */
-	  mem2hex ((char *) registers, remcomOutBuffer, NUMREGBYTES);
+	  {
+	    int i;
+	    char* outBuf = remcomOutBuffer;
+	    for (i = 0; i < NUMREGBYTES/4; i++)
+	      outBuf = mem2hex ((char *) (registers + kosRegMap[i]), outBuf, 4);
+	  }
 	  break;
+
 	case 'G':		/* set the value of the CPU registers - return OK */
-	  hex2mem (ptr, (char *) registers, NUMREGBYTES);
-	  strcpy (remcomOutBuffer, "OK");
+	  {
+	    int i;
+	    char* inBuf = ptr;
+	    for (i = 0; i < NUMREGBYTES/4; i++, inBuf += 8)
+	      hex2mem (inBuf, (char *) (registers + kosRegMap[i]), 4);
+	    strcpy (remcomOutBuffer, "OK");
+	  }
 	  break;
 
 	  /* mAA..AA,LLLL  Read LLLL bytes at address AA..AA */
