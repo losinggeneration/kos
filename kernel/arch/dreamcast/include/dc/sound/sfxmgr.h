@@ -29,12 +29,27 @@ void snd_sfx_unload(sfxhnd_t idx);
 void snd_sfx_unload_all();
 
 /* Play a sound effect with the given volume and panning; if the sound
-   effect is in stereo, the panning is ignored. */
-void snd_sfx_play(sfxhnd_t idx, int vol, int pan);
+   effect is in stereo, the panning is ignored. Returns the used channel
+   ID (or the left channel, if stereo). */
+int snd_sfx_play(sfxhnd_t idx, int vol, int pan);
+
+/* Works like snd_sfx_play, but selects a specific channel. If the sample
+   is stereo, the next channel will also be used. */
+int snd_sfx_play_chn(int chn, sfxhnd_t idx, int vol, int pan);
+
+/* Stops a single sound effect from playing. */
+void snd_sfx_stop(int chn);
 
 /* Stop all playing sound effects. Doesn't stop channels 0 or 1, which
    are assumed to be for streaming. */
 void snd_sfx_stop_all();
+
+/* Allocate a channel for non-sfx usage (e.g. streams). Returns -1
+   on failure. */
+int snd_sfx_chn_alloc();
+
+/* Free a channel for non-sfx usage. */
+void snd_sfx_chn_free(int chn);
 
 __END_DECLS
 

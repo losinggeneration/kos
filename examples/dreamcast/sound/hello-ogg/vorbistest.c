@@ -27,6 +27,7 @@ int main(int argc, char **argv)
 
 	print_d("Vorbis Decoder Library Example Program\n\n");
 
+	snd_stream_init();
 	sndoggvorbis_init();
 	print_d("sndoggvorbis_init();  called...\n");
 	
@@ -64,6 +65,7 @@ int main(int argc, char **argv)
 	}
 	sndoggvorbis_stop();
 	sndoggvorbis_shutdown();
+	snd_stream_shutdown();
 	return 0;
 }
 

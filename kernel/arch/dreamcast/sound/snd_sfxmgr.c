@@ -14,6 +14,7 @@
 
 #include <sys/queue.h>
 #include <kos/fs.h>
+#include <arch/irq.h>
 #include <dc/spu.h>
 #include <dc/sound/sound.h>
 #include <dc/sound/sfxmgr.h>
@@ -38,7 +39,11 @@ typedef struct snd_effect {
 
 struct selist snd_effects;
 
-static int sfx_lastchan = 2;
+// The next channel we'll use to play sound effects.
+static int sfx_nextchan = 0;
+
+// Our channel-in-use mask.
+static uint64 sfx_inuse = 0;
 
 /* Unload all loaded samples and free their SPU RAM */
 void snd_sfx_unload_all() {
@@ -217,8 +222,7 @@ sfxhnd_t snd_sfx_load(const char *fn) {
 	return (sfxhnd_t)t;
 }
 
-/* Play a sound effect with the given volume and panning */
-void snd_sfx_play(sfxhnd_t idx, int vol, int pan) {
+int snd_sfx_play_chn(int chn, sfxhnd_t idx, int vol, int pan) {
 	int size;
 	snd_effect_t * t = (snd_effect_t *)idx;
 	AICA_CMDSTR_CHANNEL(tmp, cmd, chan);
@@ -232,7 +236,7 @@ void snd_sfx_play(sfxhnd_t idx, int vol, int pan) {
 		cmd->cmd = AICA_CMD_CHAN;
 		cmd->timestamp = 0;
 		cmd->size = AICA_CMDSTR_CHANNEL_SIZE;
-		cmd->cmd_id = sfx_lastchan;
+		cmd->cmd_id = chn;
 		chan->cmd = AICA_CH_CMD_START;
 		chan->base = t->locl;
 		chan->type = t->fmt;
@@ -244,15 +248,11 @@ void snd_sfx_play(sfxhnd_t idx, int vol, int pan) {
 		chan->vol = vol;
 		chan->pan = pan;
 		snd_sh4_to_aica(tmp, cmd->size);
-	
-		sfx_lastchan++;
-		if (sfx_lastchan >= 64)
-			sfx_lastchan = 2;
 	} else {
 		cmd->cmd = AICA_CMD_CHAN;
 		cmd->timestamp = 0;
 		cmd->size = AICA_CMDSTR_CHANNEL_SIZE;
-		cmd->cmd_id = sfx_lastchan;
+		cmd->cmd_id = chn;
 		chan->cmd = AICA_CH_CMD_START;
 		chan->base = t->locl;
 		chan->type = t->fmt;
@@ -267,42 +267,81 @@ void snd_sfx_play(sfxhnd_t idx, int vol, int pan) {
 		snd_sh4_to_aica_stop();
 		snd_sh4_to_aica(tmp, cmd->size);
 
-		sfx_lastchan++;
-		if (sfx_lastchan >= 64)
-			sfx_lastchan = 2;
-
-		cmd->cmd_id = sfx_lastchan;
+		cmd->cmd_id = chn + 1;
 		chan->base = t->locr;
 		chan->pan = 255;
 		snd_sh4_to_aica(tmp, cmd->size);
 		snd_sh4_to_aica_start();
-		
-		sfx_lastchan++;
-		if (sfx_lastchan >= 64)
-			sfx_lastchan = 2;
 	}
+
+	return chn;
+}
+
+int snd_sfx_play(sfxhnd_t idx, int vol, int pan) {
+	int chn, old;
+
+	// This isn't perfect.. but it should be good enough.
+	old = irq_disable();
+	chn = sfx_nextchan++;
+	while ((sfx_inuse & (1 << sfx_nextchan)) && sfx_nextchan != chn) {
+		if (sfx_nextchan > 64)
+			sfx_nextchan = 0;
+	}
+	irq_restore(old);
+
+	return snd_sfx_play_chn(chn, idx, vol, pan);
+}
+
+void snd_sfx_stop(int chn) {
+	AICA_CMDSTR_CHANNEL(tmp, cmd, chan);
+	cmd->cmd = AICA_CMD_CHAN;
+	cmd->timestamp = 0;
+	cmd->size = AICA_CMDSTR_CHANNEL_SIZE;
+	cmd->cmd_id = chn;
+	chan->cmd = AICA_CH_CMD_STOP;
+	chan->base = 0;
+	chan->type = 0;
+	chan->length = 0;
+	chan->loop = 0;
+	chan->loopstart = 0;
+	chan->loopend = 0;
+	chan->freq = 44100;
+	chan->vol = 0;
+	chan->pan = 0;
+	snd_sh4_to_aica(tmp, cmd->size);
 }
 
 void snd_sfx_stop_all() {
 	int i;
 	
-	AICA_CMDSTR_CHANNEL(tmp, cmd, chan);
+	for (i=0; i<64; i++) {
+		if (sfx_inuse & (1 << i))
+			continue;
 
-	for (i=2; i<64; i++) {
-		cmd->cmd = AICA_CMD_CHAN;
-		cmd->timestamp = 0;
-		cmd->size = AICA_CMDSTR_CHANNEL_SIZE;
-		cmd->cmd_id = i;
-		chan->cmd = AICA_CH_CMD_STOP;
-		chan->base = 0;
-		chan->type = 0;
-		chan->length = 0;
-		chan->loop = 0;
-		chan->loopstart = 0;
-		chan->loopend = 0;
-		chan->freq = 44100;
-		chan->vol = 0;
-		chan->pan = 0;
-		snd_sh4_to_aica(tmp, cmd->size);
+		snd_sfx_stop(i);
 	}
+}
+
+int snd_sfx_chn_alloc() {
+	int old, chn;
+
+	old = irq_disable();
+	for (chn=0; chn<64; chn++)
+		if (!(sfx_inuse & (1 << chn)))
+			break;
+	if (chn >= 64)
+		chn = -1;
+	else
+		sfx_inuse |= 1 << chn;
+	irq_restore(old);
+
+	return chn;
+}
+
+void snd_sfx_chn_free(int chn) {
+	int old;
+
+	old = irq_disable();
+	sfx_inuse &= ~(1 << chn);
+	irq_restore(old);
 }

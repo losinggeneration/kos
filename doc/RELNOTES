@@ -14,6 +14,13 @@ The build system (including environ.sh) has seen some overhauling. You'll
 need to build a new environ.sh from a sample again. Additionally, your
 Makefile may need to change. See the examples.
 
+The sound stream system has changed to accomidate multiple streams. Please see
+kernel/arch/dreamcast/include/dc/sound/* for the new info. In particular, you
+will need to call snd_stream_init from your program before using any of the
+libraries like OggVorbis. Also if you are a stream user, you need to alloc
+and free channels, and pass a handle along with it. See the OggVorbis libs
+for an example.
+
 
 RELEASE NOTES for 1.2.1
 -----------------------

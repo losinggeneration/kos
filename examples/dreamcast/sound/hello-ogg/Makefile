@@ -20,7 +20,7 @@ clean:
 $(TARGET): $(OBJS) 
 	$(KOS_CC) $(KOS_CFLAGS) $(KOS_LDFLAGS) -o $(TARGET) $(KOS_START) \
 	$(OBJS)  $(DATAOBJS) $(OBJEXTRA) -L$(KOS_BASE)/lib -ltremor -lm -lkallisti -lgcc 
-#	$(OBJS)  $(DATAOBJS) $(OBJEXTRA) -L$(KOS_BASE)/lib -loggvorbisplay -ldcutils -lm -lkallisti -lgcc 
+#	$(OBJS)  $(DATAOBJS) $(OBJEXTRA) -L$(KOS_BASE)/lib -loggvorbisplay -lm -lkallisti -lgcc 
 
 romdisk.img:
 	$(KOS_GENROMFS) -f romdisk.img -d romdisk -v

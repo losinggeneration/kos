@@ -29,6 +29,7 @@ int main(int argc, char **argv)
 
 	print_d("mp3 Decoder Library Example Program\n\n");
 
+	snd_stream_init();
 	mp3_init();
 	print_d("sndmp3_init();  called...\n");
 	
@@ -66,6 +67,7 @@ int main(int argc, char **argv)
 	}
 	mp3_stop();
 	mp3_shutdown();
+	snd_stream_shutdown();
 	return 0;
 }
 

@@ -5,7 +5,7 @@
 uint16 sound_buffer[65536] = {0};
 CSoundFile *soundfile;
 
-void *mod_callback(int len, int * actual)
+void *mod_callback(snd_stream_hnd_t hnd, int len, int * actual)
 {
 	int res;
 	
@@ -29,9 +29,11 @@ int main(int argc, char **argv) {
 	uint8	c;
 	uint8 *mod_buffer;
 	uint32 hnd;
-	char filename[]="/rd/NEVER.XM";
+	char filename[]="/rd/test.s3m";
 
 	printf("modplug_test beginning\n");
+
+	snd_stream_init();
 
 	hnd=fs_open(filename, O_RDONLY);
 	if (!hnd) {
@@ -76,8 +78,8 @@ int main(int argc, char **argv) {
 	/*fs_close(hnd);
 	free(mod_buffer);*/
 
-	snd_stream_init(mod_callback);
-	snd_stream_start(44100,1);
+	snd_stream_hnd_t shnd = snd_stream_alloc(mod_callback, SND_STREAM_BUFFER_MAX);
+	snd_stream_start(shnd, 44100, 1);
 
 	while(1) {
 		/* Check key status */
@@ -87,12 +89,16 @@ int main(int argc, char **argv) {
 				break;
 		}
 
-		snd_stream_poll();
+		snd_stream_poll(shnd);
 		
 		timer_spin_sleep(10);
 	}
 
 	delete soundfile;
+
+	snd_stream_destroy(shnd);
+
+	snd_stream_shutdown();
 
 	return 0;
 }
