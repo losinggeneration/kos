@@ -7,6 +7,7 @@ KallistiOS version 1.2.1 -----------------------------------------------
 - DC  Added hello-mp3 example [DP]
 - DC  320x240 PAL mode [mekanaizer == MK]
 - *** Fixed vqenc and kmgenc headers to be ANSI compliant [DP]
+- *** New addons/ports build system [DP]
 
 KallistiOS version 1.2.0 -----------------------------------------------
 - DC  Fix to use DCARM7_CFLAGS when compiling ARM driver [Christian Groessler == CG]

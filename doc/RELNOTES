@@ -1,6 +1,14 @@
 KallistiOS ##version##
 Copyright (C)2002,2003 Dan Potter
 
+RELEASE NOTES for 1.2.1
+-----------------------
+There is a new build system for addons/ports which is quite a bit more
+automated than the old way, and is arch-centric. Now to build a new addon
+you downloaded, just extract it into addons/ and it will be built for
+your arch if possible.
+
+
 RELEASE NOTES for 1.2.0
 -----------------------
 The PVR API's performance/statistics measuring facility has changed.
