@@ -55,6 +55,9 @@ int arch_auto_init() {
 	if (!(__kos_init_flags & INIT_NO_DCLOAD))
 		fs_dcload_init_console();	/* Init dc-load console, if applicable */
 
+	// Init SCIF for debug stuff (maybe)
+	scif_init();
+
 	/* Init debug IO */
 	dbgio_init();
 
