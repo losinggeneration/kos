@@ -101,6 +101,7 @@ typedef struct kthread {
 
 /* Are threads cooperative or pre-emptive? */
 extern int thd_mode;
+#define THD_MODE_NONE		-1	/* Threads not running */
 #define THD_MODE_COOP		0
 #define THD_MODE_PREEMPT	1
 

@@ -66,7 +66,7 @@ uint64 thd_next_switch;
 kthread_t *thd_current = NULL;
 
 /* Thread mode: cooperative or pre-emptive. */
-int thd_mode = THD_MODE_COOP;
+int thd_mode = THD_MODE_NONE;
 
 /*****************************************************************************/
 /* Debug */
@@ -587,6 +587,11 @@ static void thd_timer_hnd(irq_context_t *context) {
    sleep because it eases the load on the system for the other
    threads. */
 void thd_sleep(int ms) {
+	if (thd_mode == THD_MODE_NONE) {
+		timer_spin_sleep(ms);
+		return;
+	}
+
 	/* We can genwait on a non-existant object here with a timeout and
 	   have the exact same effect; as a nice bonus, this collapses both
 	   sleep cases into a single case, which is nice for scheduling
@@ -705,6 +710,10 @@ int thd_set_mode(int mode) {
 int thd_init(int mode) {
 	kthread_t *idle, *kern;
 
+	/* Make sure we're not already running */
+	if (thd_mode != THD_MODE_NONE)
+		return -1;
+
 	/* Setup our mode as appropriate */
 	thd_mode = mode;
 
@@ -787,6 +796,9 @@ void thd_shutdown() {
 	sem_shutdown();
 	cond_shutdown();
 	genwait_shutdown();
+
+	/* Not running */
+	thd_mode = THD_MODE_NONE;
 }
 
 
