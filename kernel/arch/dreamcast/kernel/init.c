@@ -39,6 +39,11 @@ int arch_auto_init() {
 	/* Initialize memory management */
 	mm_init();
 
+	/* Do this immediately so we can receive exceptions for init code
+	   and use ints for dbgio receive. */
+	irq_init();			/* IRQs */
+	irq_disable();			/* Turn on exceptions */
+
 	if (!(__kos_init_flags & INIT_NO_DCLOAD))
 		fs_dcload_init_console();	/* Init dc-load console, if applicable */
 	dbgio_init();			/* Init debug IO and print a banner */
@@ -50,8 +55,6 @@ int arch_auto_init() {
 		dbgio_printk(banner);
 	}
 	
-	irq_init();			/* IRQs */
-	irq_disable();			/* Turn on exceptions */
 	timer_init();			/* Timers */
 	hardware_sys_init();		/* DC low-level hardware init */
 
