@@ -99,7 +99,7 @@ __BEGIN_DECLS
 	asm(	"fmov	%1,fr0\n\t" \
 		".short	0xf07d\n\t" \
 		"fmov	fr0,%0\n\t" \
-	: "=f" (__value) : "f" (__arg)); \
+	: "=f" (__value) : "f" (__arg) : "fpul", "fr0"); \
 	__value; })
 
 
