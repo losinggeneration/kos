@@ -776,10 +776,10 @@ pvr_init_params_t params = {
 	512*1024
 };
 
-extern uint8 romdisk_boot[];
+extern uint8 romdisk[];
 
 KOS_INIT_FLAGS(INIT_DEFAULT);
-KOS_INIT_ROMDISK(romdisk_boot);
+KOS_INIT_ROMDISK(romdisk);
 
 /* Main program: init and loop drawing polygons */
 int main() {
