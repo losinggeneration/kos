@@ -8,6 +8,14 @@ automated than the old way, and is arch-centric. Now to build a new addon
 you downloaded, just extract it into addons/ and it will be built for
 your arch if possible.
 
+Subsequently, most everything that was in addons/ in previous versions of
+KOS is now located in its own source control tree (and will be distributed
+separately).
+
+Several incorrectly placed pieces were moved from kernel/ into their own
+addon (libkosutils). If you use the bspline or kos_img_* functions, you'll
+need to add -lkosutils to your link line somewhere.
+
 
 RELEASE NOTES for 1.2.0
 -----------------------

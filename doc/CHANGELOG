@@ -8,6 +8,8 @@ KallistiOS version 1.2.1 -----------------------------------------------
 - DC  320x240 PAL mode [mekanaizer == MK]
 - *** Fixed vqenc and kmgenc headers to be ANSI compliant [DP]
 - *** New addons/ports build system [DP]
+- *** Moved most addons/ports into their own tree/distribution [DP]
+- *** Moved several incorrectly placed pieces into libkosutils [DP]
 
 KallistiOS version 1.2.0 -----------------------------------------------
 - DC  Fix to use DCARM7_CFLAGS when compiling ARM driver [Christian Groessler == CG]

@@ -21,9 +21,6 @@ __BEGIN_DECLS
 #include <string.h>
 #include <unistd.h>
 
-/* These still haven't been fully ported */
-/* #include <kos/msg.h> */
-
 #include <kos/fs.h>
 #include <kos/fs_builtin.h>
 #include <kos/fs_romdisk.h>
@@ -33,9 +30,6 @@ __BEGIN_DECLS
 #include <kos/sem.h>
 #include <kos/mutex.h>
 #include <kos/cond.h>
-#include <kos/pcx.h>
-#include <kos/img.h>
-#include <kos/vector.h>
 
 #include <arch/arch.h>
 #include <arch/cache.h>

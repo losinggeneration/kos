@@ -18,7 +18,7 @@ rm-elf:
 
 $(TARGET): $(OBJS) romdisk.o
 	$(KOS_CCPLUS) $(KOS_CFLAGS) $(KOS_CPPFLAGS) $(KOS_LDFLAGS) -o $(TARGET) $(KOS_START) \
-		$(OBJS) romdisk.o $(OBJEXTRA) -lk++ -lgl -lpcx $(KOS_LIBS)
+		$(OBJS) romdisk.o $(OBJEXTRA) -lk++ -lgl -lpcx -lkosutils $(KOS_LIBS)
 
 romdisk.img:
 	$(KOS_GENROMFS) -f romdisk.img -d romdisk -v

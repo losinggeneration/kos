@@ -20,7 +20,7 @@ rm-elf:
 
 $(TARGET): $(OBJS) romdisk.o
 	$(KOS_CC) $(KOS_CFLAGS) $(KOS_LDFLAGS) -o $(TARGET) $(KOS_START) \
-	$(OBJS) romdisk.o $(OBJEXTRA) -L$(KOS_BASE)/lib -ldcplib -lk++ -lgl -lpcx -lm $(KOS_LIBS)
+	$(OBJS) romdisk.o $(OBJEXTRA) -L$(KOS_BASE)/lib -ldcplib -lk++ -lgl -lpcx -lkosutils -lm $(KOS_LIBS)
 
 
 romdisk.img:
