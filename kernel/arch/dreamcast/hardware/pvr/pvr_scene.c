@@ -23,7 +23,7 @@
 
 CVSID("$Id: pvr_scene.c,v 1.9 2003/03/09 01:19:31 bardtx Exp $");
 
-void * pvr_set_vertex_buffer(pvr_list_t list, void * buffer, int len) {
+void * pvr_set_vertbuf(pvr_list_t list, void * buffer, int len) {
 	void * oldbuf;
 
 	// Make sure we have global DMA usage enabled. The DMA can still
@@ -91,6 +91,9 @@ void pvr_vertbuf_written(pvr_list_t list, uint32 amt) {
 void pvr_scene_begin() {
 	int i;
 
+	// Get general stuff ready.
+	pvr_state.list_reg_open = -1;
+
 	// Clear these out in case we're using DMA.
 	if (pvr_state.dma_mode) {
 		for (i=0; i<PVR_OPB_COUNT; i++) {
@@ -99,8 +102,6 @@ void pvr_scene_begin() {
 		pvr_sync_stats(PVR_SYNC_BUFSTART);
 		// DBG(("pvr_scene_begin(dma -> %d)\n", pvr_state.ram_target));
 	} else {
-		// Get general stuff ready.
-		pvr_state.list_reg_open = -1;
 		pvr_state.lists_closed = 0;
 
 		// We assume registration is starting immediately
@@ -123,13 +124,11 @@ void pvr_scene_begin_txr(pvr_ptr_t txr, uint32 *rx, uint32 *ry) {
 int pvr_list_begin(pvr_list_t list) {
 	/* Check to make sure we can do this */
 #ifndef NDEBUG
-	if (pvr_state.lists_closed & (1 << list)) {
+	if (!pvr_state.dma_mode && pvr_state.lists_closed & (1 << list)) {
 		dbglog(DBG_WARNING, "pvr_list_begin: attempt to open already closed list\n");
 		return -1;
 	}
 #endif	/* !NDEBUG */
-
-	assert( !pvr_state.dma_mode );
 
 	/* If we already had a list open, close it first */
 	if (pvr_state.list_reg_open != -1)
@@ -147,39 +146,31 @@ int pvr_list_begin(pvr_list_t list) {
    a list that is already closed is also an error (-1). Note that if you open
    a list but do not submit any primitives, this causes a hardware error. For
    simplicity we just always submit a blank primitive. */
-static int primcnt = 0;
 int pvr_list_finish() {
 	/* Check to make sure we can do this */
 #ifndef NDEBUG
-	if (pvr_state.list_reg_open == -1) {
+	if (!pvr_state.dma_mode && pvr_state.list_reg_open == -1) {
 		dbglog(DBG_WARNING, "pvr_list_finish: attempt to close unopened list\n");
 		return -1;
 	}
 #endif	/* !NDEBUG */
 
-	assert( !pvr_state.dma_mode );
-
-	/* In case we haven't sent anything in this list, send a dummy */
-	if (!primcnt)
+	if (!pvr_state.dma_mode) {
+		/* In case we haven't sent anything in this list, send a dummy */
 		pvr_blank_polyhdr(pvr_state.list_reg_open);
-	primcnt = 0;
 	
-	/* Set the flags */
-	pvr_state.lists_closed |= (1 << pvr_state.list_reg_open);
-	pvr_state.list_reg_open = -1;
+		/* Set the flags */
+		pvr_state.lists_closed |= (1 << pvr_state.list_reg_open);
 
-	/* Send an EOL marker */
-	sq_set32((void *)PVR_TA_INPUT, 0, 32);
+		/* Send an EOL marker */
+		sq_set32((void *)PVR_TA_INPUT, 0, 32);
+	}
+
+	pvr_state.list_reg_open = -1;
 
 	return 0;
 }
 
-/* Submit a primitive of the _current_ list type; note that any values
-   submitted in this fashion will go directly to the hardware without any
-   sort of buffering, and submitting a primitive of the wrong type will
-   quite likely ruin your scene. Note that this also will not work if you
-   haven't begun any list types (i.e., all data is queued). Returns -1 for
-   failure. */
 int pvr_prim(void * data, int size) {
 	/* Check to make sure we can do this */
 #ifndef NDEBUG
@@ -187,15 +178,14 @@ int pvr_prim(void * data, int size) {
 		dbglog(DBG_WARNING, "pvr_prim: attempt to submit to unopened list\n");
 		return -1;
 	}
-
-	// Put this inside here since it could slow things down a lot.
-	assert( !pvr_state.dma_mode );
 #endif	/* !NDEBUG */
 
-	primcnt=1;
-
-	/* Send the data */
-	sq_cpy((void *)PVR_TA_INPUT, data, size);
+	if (!pvr_state.dma_mode) {
+		/* Send the data */
+		sq_cpy((void *)PVR_TA_INPUT, data, size);
+	} else {
+		return pvr_list_prim(pvr_state.list_reg_open, data, size);
+	}
 	
 	return 0;
 }

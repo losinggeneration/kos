@@ -656,6 +656,9 @@ void pvr_mem_stats();
    care of starting a frame rendering (after scene_finish()) and also
    flipping pages when appropriate. */
 
+/* Returns non-zero if vertex DMA was enabled at init time. */
+int pvr_vertex_dma_enabled();
+
 /* Setup a vertex buffer for one of the list types. If the specified list type
    already has a vertex buffer, it will be replaced by the new one; if NULL
    is specified as a buffer location, the list type will be switched to direct
@@ -666,7 +669,7 @@ void pvr_mem_stats();
    bytes, even if you have no intention of using the given list. Also you
    should generally not try to do this at any time besides before a frame
    is begin, or Bad Things May Happen. */
-void * pvr_set_vertex_buffer(pvr_list_t list, void * buffer, int len);
+void * pvr_set_vertbuf(pvr_list_t list, void * buffer, int len);
 
 /* Return a pointer to the current output location in the DMA buffer for
    the requested list. DMA must globally be enabled for this to work. Data
@@ -691,8 +694,10 @@ void pvr_scene_begin_txr(pvr_ptr_t txr, uint32 *rx, uint32 *ry);
 
 /* Begin collecting data for the given list type. Lists do not have to be
    submitted in any particular order, but all types of a list must be 
-   submitted at once. If the given list has already been closed, then an
-   error (-1) is returned. */
+   submitted at once (unless vertex DMA mode is enabled). If the given list
+   has already been closed, then an error (-1) is returned. Note that there
+   is no need to call this function in DMA mode unless you want to make use
+   of pvr_prim for compatibility. */
 int pvr_list_begin(pvr_list_t list);
 
 /* End collecting data for the current list type. Lists can never be opened
@@ -700,15 +705,18 @@ int pvr_list_begin(pvr_list_t list);
    a primitive that belongs in a closed list is considered an error. Closing
    a list that is already closed is also an error (-1). Note that if you open
    a list but do not submit any primitives, a blank one will be submitted to
-   satisfy the hardware. */
+   satisfy the hardware. If vertex DMA mode is enabled, then this simply
+   sets the current list pointer to no list, and none of the above restrictions
+   apply. */
 int pvr_list_finish();
 
 /* Submit a primitive of the _current_ list type; note that any values
    submitted in this fashion will go directly to the hardware without any
    sort of buffering, and submitting a primitive of the wrong type will
    quite likely ruin your scene. Note that this also will not work if you
-   haven't begun any list types (i.e., all data is queued). Returns -1 for
-   failure. */
+   haven't begun any list types (i.e., all data is queued). If DMA is enabled,
+   the primitive will be appended to the end of the currently selected list's
+   buffer. Returns -1 for failure. */
 int pvr_prim(void * data, int size);
 
 /* Initialize a state variable for Direct Rendering; variable should be

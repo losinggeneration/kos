@@ -61,6 +61,10 @@ int pvr_get_stats(pvr_stats_t *stat) {
 	return 0;
 }
 
+int pvr_vertex_dma_enabled() {
+	return pvr_state.dma_mode;
+}
+
 /******** INTERNAL STUFF ************************************************/
 
 /* Update statistical counters */
