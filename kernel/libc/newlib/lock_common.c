@@ -1,3 +1,10 @@
+/* KallistiOS ##version##
+
+   lock_common.c
+   Copyright (C)2004 Dan Potter
+
+*/
+
 #include <assert.h>
 #include "lock_common.h"
 #include <arch/irq.h>

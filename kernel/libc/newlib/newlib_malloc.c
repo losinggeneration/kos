@@ -1,3 +1,10 @@
+/* KallistiOS ##version##
+
+   newlib_malloc.c
+   Copyright (C)2004 Dan Potter
+
+*/
+
 #include <stdlib.h>
 #include <reent.h>
 

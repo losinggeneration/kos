@@ -1,3 +1,10 @@
+/* KallistiOS ##version##
+
+   closedir.c
+   Copyright (C)2004 Dan Potter
+
+*/
+
 #include <dirent.h>
 #include <errno.h>
 #include <stdlib.h>

@@ -1,3 +1,10 @@
+/* KallistiOS ##version##
+
+   telldir.c
+   Copyright (C)2004 Dan Potter
+
+*/
+
 #include <kos/dbglog.h>
 #include <errno.h>
 

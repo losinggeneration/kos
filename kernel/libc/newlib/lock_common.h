@@ -1,3 +1,10 @@
+/* KallistiOS ##version##
+
+   lock_common.h
+   Copyright (C)2004 Dan Potter
+
+*/
+
 #ifndef __NEWLIB_LOCK_COMMON_H
 #define __NEWLIB_LOCK_COMMON_H
 
