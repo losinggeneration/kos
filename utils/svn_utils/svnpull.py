@@ -194,7 +194,7 @@ Copyright (C)2003 Dan Potter
 
 	# Make sure we're called with enough parameters
 	if path_svnrepo is None:
-		if len(argv) < 4:
+		if len(argv) < 3:
 			help()
 			sys.exit(-1)
 		else:
