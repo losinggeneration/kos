@@ -123,6 +123,10 @@ void pvr_allocate_buffers(pvr_init_params_t *params) {
 	pvr_state.w = vid_mode->width;		pvr_state.h = vid_mode->height;
 	pvr_state.tw = pvr_state.w / 32;	pvr_state.th = pvr_state.h / 32;
 
+	/* FSAA -> double the tile buffer width */
+	if (pvr_state.fsaa)
+		pvr_state.tw *= 2;
+
 	/* We can actually handle non-mod-32 heights pretty easily -- just extend
 	   the frame buffer a bit, but use a pixel clip for the real mode. */
 	if ((pvr_state.h % 32) != 0) {

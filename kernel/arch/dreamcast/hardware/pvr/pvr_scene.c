@@ -277,7 +277,18 @@ int pvr_wait_ready() {
 
 	t = sem_wait_timed(pvr_state.ready_sem, 100);
 	if (t < 0) {
+#if 0
 		dbglog(DBG_WARNING, "pvr_wait_ready: timed out\n");
+		printf("VERTBUF_ADDR: %08lx\n", PVR_GET(PVR_ISP_VERTBUF_ADDR));
+		printf("TILEMAT_ADDR: %08lx\n", PVR_GET(PVR_ISP_TILEMAT_ADDR));
+		printf("OPB_START: %08lx\n", PVR_GET(PVR_TA_OPB_START));
+		printf("OPB_END: %08lx\n", PVR_GET(PVR_TA_OPB_END));
+		printf("OPB_POS: %08lx\n", PVR_GET(PVR_TA_OPB_POS));
+		printf("OPB_INIT: %08lx\n", PVR_GET(PVR_TA_OPB_INIT));
+		printf("VERTBUF_START: %08lx\n", PVR_GET(PVR_TA_VERTBUF_START));
+		printf("VERTBUF_END: %08lx\n", PVR_GET(PVR_TA_VERTBUF_END));
+		printf("VERTBUF_POS: %08lx\n", PVR_GET(PVR_TA_VERTBUF_POS));
+#endif
 		return -1;
 	}
 

@@ -210,6 +210,9 @@ typedef struct {
 
 	// Handle for the vblank interrupt
 	int		vbl_handle;
+
+	// Non-zero if FSAA was enabled at init time.
+	int		fsaa;
 } pvr_state_t;
 
 /* There will be exactly one of these in KOS (in pvr_globals.c) */

@@ -35,6 +35,9 @@ int pvr_init_defaults() {
 		512*1024,
 
 		/* No DMA */
+		0,
+
+		/* No FSAA */
 		0
 	};
 
@@ -79,6 +82,9 @@ int pvr_init(pvr_init_params_t *params) {
 	// Enable DMA if the user wants that.
 	pvr_state.dma_mode = params->dma_enabled;
 
+	// Copy over FSAA setting.
+	pvr_state.fsaa = params->fsaa_enabled;
+
 	/* Everything's clear, do the initial buffer pointer setup */
 	pvr_allocate_buffers(params);
 
@@ -113,10 +119,16 @@ int pvr_init(pvr_init_params_t *params) {
 	/* If we're on a VGA box, disable vertical smoothing */
 	if (vid_mode->cable_type == CT_VGA) {
 		dbglog(DBG_KDEBUG, "pvr: disabling vertical scaling for VGA\n");
-		PVR_SET(PVR_SCALER_CFG, 0x400);
+		if (pvr_state.fsaa)
+			PVR_SET(PVR_SCALER_CFG, 0x10400);
+		else
+			PVR_SET(PVR_SCALER_CFG, 0x400);
 	} else {
 		dbglog(DBG_KDEBUG, "pvr: enabling vertical scaling for non-VGA\n");
-		PVR_SET(PVR_SCALER_CFG, 0x401);
+		if (pvr_state.fsaa)
+			PVR_SET(PVR_SCALER_CFG, 0x10401);
+		else
+			PVR_SET(PVR_SCALER_CFG, 0x401);
 	}
 
 	/* Hook the PVR interrupt events on G2 */
