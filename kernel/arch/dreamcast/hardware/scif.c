@@ -181,6 +181,11 @@ int scif_detected() {
 	return 1;
 }
 
+// We use this for the dbgio interface because we always init SCIF.
+int scif_init_fake() {
+	return 0;
+}
+
 /* Initialize the SCIF port; baud_rate must be at least 9600 and
    no more than 57600. 115200 does NOT work for most PCs. */
 // recv trigger to 1 byte
@@ -358,7 +363,7 @@ int scif_read_buffer(uint8 *data, int len) {
 dbgio_handler_t dbgio_scif = {
 	"scif",
 	scif_detected,
-	scif_init,
+	scif_init_fake,
 	scif_shutdown,
 	scif_set_irq_usage,
 	scif_read,
