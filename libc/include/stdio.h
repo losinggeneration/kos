@@ -36,6 +36,7 @@ typedef off_t fpos_t;
 #define stdin ( (FILE *)1 )
 #define stdout ( (FILE *)2 )
 #define stderr ( (FILE *)2 )
+#define getc(x) fgetc(x)
 
 void     clearerr(FILE *);
 int      fclose(FILE *);
