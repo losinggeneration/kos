@@ -494,7 +494,6 @@ static int valid_size(int x) {
 static fquad_t *create_map(int res, image_t *im) {
 	int	x, y;
 	int	nquads;
-	int	stride2;
 	fquad_t *q, *qt;
 	
 	if (use_debug) {
@@ -506,18 +505,14 @@ static fquad_t *create_map(int res, image_t *im) {
 	if (q == NULL)
 		return NULL;
 
-	/* one cycle a day can save a life of a child! */
-	stride2 = im->stride << 1;
-
 	qt = q;
-	for (y=0; y<im->h/2; y++) {
-	
+	for (y=0; y<im->h; y+=2) {
 		/* warning, ugly code coming up */
-		for (x=0; x<im->w/2; x++) {
-			get_color(&qt->p[0], im->data + (y*stride2) + (x*2*4));
-			get_color(&qt->p[1], im->data + (y*stride2) + ((x+1)*2*4));
-			get_color(&qt->p[2], im->data + ((y+1)*stride2) + (x*2*4));
-			get_color(&qt->p[3], im->data + ((y+1)*stride2) + ((x+1)*2*4));
+		for (x=0; x<im->w; x+=2) {
+			get_color(&qt->p[0], im->data + (y*im->stride) + (x*4));
+			get_color(&qt->p[1], im->data + (y*im->stride) + ((x+1)*4));
+			get_color(&qt->p[2], im->data + ((y+1)*im->stride) + (x*4));
+			get_color(&qt->p[3], im->data + ((y+1)*im->stride) + ((x+1)*4));
 			qt++;
 		}
 	}
