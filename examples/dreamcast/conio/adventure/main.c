@@ -73,6 +73,7 @@ main(int argc, char **argv)
 
 	pvr_init_defaults();
 	conio_init(CONIO_TTY_PVR, CONIO_INPUT_LINE);
+	// conio_init(CONIO_TTY_SERIAL, CONIO_INPUT_LINE);
 
 #if 0
 	/* revoke */

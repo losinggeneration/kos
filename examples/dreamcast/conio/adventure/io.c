@@ -319,7 +319,7 @@ int sect;
 				mtext[oldloc].seekadr=seekhere;
 				mtext[oldloc].txtlen=maystart-seekstart;
 				break;
-			    default:
+			//    default:
 				/* errx(1, "rdesc called with bad section"); */
 			}
 			seekhere += maystart-seekstart;

@@ -23,7 +23,8 @@
 #define err(a, b...) ({ })
 #define errx(a, b...) ({ })
 
-
+#undef getchar
+#undef putchar
 int getchar();
 
 #endif	/* __PORTHELPER_H */
