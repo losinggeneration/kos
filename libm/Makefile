@@ -18,7 +18,7 @@ SUBDIRS =
 KOS_CFLAGS := $(KOS_CFLAGS) -I$(KOS_BASE)/libm -I$(KOS_BASE)/libm/common -I$(KOS_BASE)/include/newlib-libm-sh4
 
 all: $(OBJS)
-	$(KOS_AR) rcs $(KOS_BASE)/lib/libm.a $(OBJS)
+	$(KOS_AR) rcs $(KOS_BASE)/lib/$(KOS_ARCH)/libm.a $(OBJS)
 
 # Grab the shared Makefile pieces
 include $(KOS_BASE)/Makefile.prefab

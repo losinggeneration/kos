@@ -10,8 +10,8 @@ OBJS = mem.o pure_virtual.o
 SUBDIRS =
 
 myall: $(OBJS)
-	rm -f $(KOS_BASE)/lib/libk++.a
-	$(KOS_AR) rcs $(KOS_BASE)/lib/libk++.a $(OBJS)
+	rm -f $(KOS_BASE)/lib/$(KOS_ARCH)/libk++.a
+	$(KOS_AR) rcs $(KOS_BASE)/lib/$(KOS_ARCH)/libk++.a $(OBJS)
 
 include $(KOS_BASE)/Makefile.prefab
 

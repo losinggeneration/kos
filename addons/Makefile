@@ -19,6 +19,8 @@
 # want some ports to build then you can just move them up under an "unused"
 # dir or some such.
 
+# If you have multiple addon dirs (e.g., you're tracking multiple svn repos
+# or some such) then you can duplicate this Makefile to the root of each.
 
 # Get our list of dirs to build/clean. You must have sed installed for this
 # to work (GNU textutils).

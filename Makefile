@@ -1,43 +1,31 @@
 # KallistiOS ##version##
 #
 # Root Makefile
-# (c)2000-2001 Dan Potter
+# Copyright (C)2003 Dan Potter
 #   
 # $Id: Makefile,v 1.5 2002/04/20 17:23:31 bardtx Exp $
 
-all: build-utils build-libc build-libm build-libk++ build-kernel build-addons # build-examples
-
-clean:
-	-rm -f lib/*
-	$(KOS_MAKE) -C utils clean
-	$(KOS_MAKE) -C libc clean
-	$(KOS_MAKE) -C libm clean
-	$(KOS_MAKE) -C libk++ clean
-	$(KOS_MAKE) -C kernel clean
-	$(KOS_MAKE) -C addons clean
-#	$(KOS_MAKE) -C examples clean
-
-build-utils:
-	$(KOS_MAKE) -C utils
-
-build-libc:
-	$(KOS_MAKE) -C libc
-
-build-libm:
-	$(KOS_MAKE) -C libm
-
-build-libk++:
+# Add stuff to DIRS to auto-compile it with the big tree.
+DIRS = utils libc libm
 ifdef KOS_CCPLUS
-	$(KOS_MAKE) -C libk++
+	DIRS += libk++
+endif
+DIRS += kernel addons # examples
+
+# Detect a non-working or missing environ.sh file.
+ifndef KOS_BASE
+error:
+	@echo You don\'t seem to have a working  environ.sh file. Please take a look at
+	@echo doc/README for more info.
+	@exit 0
 endif
 
-build-kernel:
-	$(KOS_MAKE) -C kernel
+all:
+	for i in $(DIRS); do $(KOS_MAKE) -C $$i; done
 
-build-addons:
-	$(KOS_MAKE) -C addons
+clean:
+	for i in $(DIRS); do $(KOS_MAKE) -C $$i clean; done
 
-build-examples:
-	$(KOS_MAKE) -C examples
-
-
+distclean: clean
+	-rm -f $(KOS_BASE)/lib/$(KOS_ARCH)/*
+	-rm -f $(KOS_BASE)/addons/lib/$(KOS_ARCH)/*

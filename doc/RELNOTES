@@ -10,6 +10,10 @@ Several libc standards compliance things were fixed, so stdlib.h no longer
 includes assert.h for you. This will break some code that assumes that
 assert() is available when stdlib.h (or kos.h) is included.
 
+The build system (including environ.sh) has seen some overhauling. You'll
+need to build a new environ.sh from a sample again. Additionally, your
+Makefile may need to change. See the examples.
+
 
 RELEASE NOTES for 1.2.1
 -----------------------

@@ -7,10 +7,18 @@
 
 OBJS =
 SUBDIRS = arch fs thread net exports
+STUBS = stubs/kernel_export_stubs.o stubs/arch_export_stubs.o
 
-all: subdirs
-	rm -f $(KOS_BASE)/lib/libkallisti.a
-	$(KOS_AR) rcs $(KOS_BASE)/lib/libkallisti.a build/*.o build/libc/*.o
+all: subdirs $(STUBS)
+	rm -f $(KOS_BASE)/lib/$(KOS_ARCH)/libkallisti.a
+	$(KOS_AR) rcs $(KOS_BASE)/lib/$(KOS_ARCH)/libkallisti.a build/*.o build/libc/*.o
+	$(KOS_AR) rcs $(KOS_BASE)/lib/$(KOS_ARCH)/libkallisti_exports.a stubs/*.o
+
+stubs/kernel_export_stubs.c: exports.txt
+	$(KOS_BASE)/utils/genexports/genexportstubs.sh $< stubs/kernel_export_stubs.c
+
+stubs/arch_export_stubs.c: arch/$(KOS_ARCH)/exports.txt
+	$(KOS_BASE)/utils/genexports/genexportstubs.sh $< stubs/arch_export_stubs.c
 
 include $(KOS_BASE)/Makefile.prefab
 

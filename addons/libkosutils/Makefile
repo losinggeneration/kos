@@ -5,4 +5,4 @@
 TARGET = libkosutils.a
 OBJS = bspline.o img.o pcx_small.o
 
-include ../Makefile.prefab
+include $(KOS_BASE)/addons/Makefile.prefab
