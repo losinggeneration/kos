@@ -222,6 +222,7 @@ static unsigned char *getpacket (void);
 static void putpacket (char *);
 static int computeSignal (int exceptionVector);
 
+static void hardBreakpoint (int, int, int, int, char*);
 static void putDebugChar (char);
 static char getDebugChar (void);
 static void flushDebugChannel (void);
@@ -641,6 +642,93 @@ undoSStep (void)
   stepped = 0;
 }
 
+/* Handle inserting/removing a hardware breakpoint.
+   Using the SH4 User Break Controller (UBC) we can have
+   two breakpoints, each set for either instruction and/or operand access.
+   Break channel B can match a specific data being moved, but there is
+   no GDB remote protocol spec for utilizing this functionality. */
+
+#define LREG(r, o) (*((uint32*)((r)+(o))))
+#define WREG(r, o) (*((uint16*)((r)+(o))))
+#define BREG(r, o) (*((uint8*)((r)+(o))))
+
+static void
+hardBreakpoint (int set, int brktype, int addr, int length, char* resBuffer)
+{
+  char* const ucb_base = (char*)0xff200000;
+  static const int ucb_step = 0xc;
+  static const char BAR = 0x0, BAMR = 0x4, BBR = 0x8, /*BASR = 0x14,*/ BRCR = 0x20;
+
+  static const uint8 bbrBrk[] = {
+    0x0,  /* type 0, memory breakpoint -- unsupported */
+    0x14, /* type 1, hardware breakpoint */
+    0x28, /* type 2, write watchpoint */
+    0x24, /* type 3, read watchpoint */
+    0x2c  /* type 4, access watchpoint */
+  };
+
+  uint8 bbr = 0;
+  char* ucb;
+  int i;
+
+  if ( length <= 8 )
+    do { bbr++; } while ( length >>= 1 );
+
+  bbr |= bbrBrk[brktype];
+
+  if ( addr == 0 ) /* GDB tries to watch 0, wasting a UCB channel */
+  {
+    strcpy(resBuffer, "OK");
+  }
+  else if ( brktype == 0 )
+  {
+    /* we don't support memory breakpoints -- the debugger
+       will use the manual memory modification method */
+    *resBuffer = '\0';
+  }
+  else if ( length > 8 )
+  {
+    strcpy(resBuffer, "E22");
+  }
+  else if (set)
+  {
+    WREG(ucb_base, BRCR) = 0;
+
+    /* find a free UCB channel */
+    for (ucb = ucb_base, i = 2; i > 0; ucb += ucb_step, i--)
+      if (WREG(ucb, BBR) == 0)
+        break;
+
+    if (i)
+    {
+      LREG(ucb, BAR) = addr;
+      BREG(ucb, BAMR) = 0x4; /* no BASR bits used, all BAR bits used */
+      WREG(ucb, BBR) = bbr;
+      strcpy(resBuffer, "OK");
+    }
+    else
+      strcpy(resBuffer, "E12");
+  }
+  else
+  {
+    /* find matching UCB channel */
+    for (ucb = ucb_base, i = 2; i > 0; ucb += ucb_step, i--)
+      if (LREG(ucb, BAR) == addr && WREG(ucb, BBR) == bbr)
+        break;
+
+    if (i)
+    {
+      WREG(ucb, BBR) = 0;
+      strcpy(resBuffer, "OK");
+    }
+    else
+      strcpy(resBuffer, "E06");
+  }
+}
+
+#undef LREG
+#undef WREG
+
 /*
 This function does all exception handling.  It only does two things -
 it figures out why it was called and tells gdb, and then it reacts
@@ -771,6 +859,25 @@ gdb_handle_exception (int exceptionVector)
 	case 'k':		/* reboot */
       arch_reboot();
 	  break;
+
+	  /* set or remove a breakpoint */
+	case 'Z':
+	case 'z':
+	  {
+	    int set = (*(ptr-1) == 'Z');
+	    int brktype = *ptr++ - '0';
+	    if (*(ptr++) == ',')
+	      if (hexToInt (&ptr, &addr))
+		if (*(ptr++) == ',')
+		  if (hexToInt (&ptr, &length))
+		    {
+		      hardBreakpoint (set, brktype, addr, length, remcomOutBuffer);
+		      ptr = 0;
+		    }
+	    if (ptr)
+	      strcpy (remcomOutBuffer, "E02");
+	    }
+	  break;
 	}			/* switch */
 
       /* reply to the request */
@@ -873,6 +980,7 @@ void gdb_init() {
   irq_set_handler(EXC_SLOT_ILLEGAL_INSTR, handle_exception);
   irq_set_handler(EXC_DATA_ADDRESS_READ, handle_exception);
   irq_set_handler(EXC_DATA_ADDRESS_WRITE, handle_exception);
+  irq_set_handler(EXC_USER_BREAK_PRE, handle_exception);
 
   trapa_set_handler(32, handle_gdb_trapa);
   trapa_set_handler(255, handle_user_trapa);
