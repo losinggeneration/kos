@@ -36,7 +36,6 @@ typedef off_t fpos_t;
 #define stdin ( (FILE *)1 )
 #define stdout ( (FILE *)2 )
 #define stderr ( (FILE *)2 )
-#define getc(x) fgetc(x)
 
 void     clearerr(FILE *);
 int      fclose(FILE *);
@@ -45,6 +44,7 @@ int      feof(FILE *);
 int      ferror(FILE *);
 int      fflush(FILE *);
 int      fgetc(FILE *);
+int      getc(FILE *);	/* This can't be a macro thanks to broken g++v3 libs */
 int      fgetpos(FILE *, fpos_t *);
 char    *fgets(char *, int, FILE *);
 int      fileno(FILE *);

@@ -241,6 +241,10 @@ int fgetc(FILE *file) {
 	return (int)ch;
 }
 
+int getc(FILE * file) {
+	return fgetc(file);
+}
+
 int ungetc(int c, FILE *file) {
 	if (!VALID_FILE(file) || (file->has_putback) ||
 		(fs_tell(file->file) <= 0)) {
