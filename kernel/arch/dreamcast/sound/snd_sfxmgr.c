@@ -1,7 +1,7 @@
 /* KallistiOS ##version##
 
    snd_sfxmgr.c
-   (c)2000-2002 Dan Potter
+   Copyright (c)2000,2001,2002,2003,2004 Dan Potter
 
    Sound effects management system; this thing loads and plays sound effects
    during game operation.
@@ -286,6 +286,7 @@ int snd_sfx_play(sfxhnd_t idx, int vol, int pan) {
 	while ((sfx_inuse & (1 << sfx_nextchan)) && sfx_nextchan != chn) {
 		if (sfx_nextchan > 64)
 			sfx_nextchan = 0;
+		sfx_nextchan++;
 	}
 	irq_restore(old);
 
