@@ -23,7 +23,7 @@ __BEGIN_DECLS
 typedef float matrix_t[4][4];
 
 /* Vector definition */
-typedef struct vector { float x, y, z, w; } vector_t;
+typedef struct vectorstr { float x, y, z, w; } vector_t;
 
 /* Points are just vectors */
 typedef vector_t point_t;
