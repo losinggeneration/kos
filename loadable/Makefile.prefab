@@ -14,9 +14,18 @@ include $(KOS_BASE)/Makefile.rules
 $(TARGET): $(OBJS)
 	$(KOS_CC) -g -ml -m4-single-only -O2 -g -Wl,-Ttext=0x00000000 -e _start -nostartfiles -nostdlib -o dbg-$(TARGET) $(OBJS) $(KOS_LIB_PATHS) -Wl,--start-group $(LIBS) -lkallisti_exports -lgcc -Wl,--end-group
 	$(KOS_CC) -g -ml -m4-single-only -O2 -Wl,-d -Wl,-r -Wl,-S -Wl,-x -nostartfiles -nostdlib -o $(TARGET) -Wl,-T $(KOS_BASE)/loadable/shlelf_dc.xr $(OBJS) $(KOS_LIB_PATHS) -Wl,--start-group $(LIBS) -lgcc -Wl,--end-group
+	-chmod +x $(TARGET)
 
 clean:
 	-rm -f $(OBJS) $(TARGET) dbg-$(TARGET) romdisk.o romdisk.img
 
 copy:
 	cp $(TARGET) $(KOS_BASE)/kernel/romdisk/
+
+# If they want an exports table, we'll set that up too.
+ifdef EXPORTS_SYMBOL
+exports.o: exports.c
+
+exports.c: $(EXPORTS_FILE)
+	$(KOS_BASE)/utils/genexports/genexports.sh $(EXPORTS_FILE) exports.c $(EXPORTS_SYMBOL)
+endif
