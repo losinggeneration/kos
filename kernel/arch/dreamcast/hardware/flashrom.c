@@ -214,7 +214,8 @@ static int flashrom_load_syscfg(uint8 * buffer) {
 /* Structure of the system config block (as much as we know anyway). */
 typedef struct {
 	uint16	block_id;	/* Should be 5 */
-	uint8	unk1[5];	/* Unknown */
+	uint8	date[4];	/* Last set time (secs since 1/1/1950 in LE) */
+	uint8	unk1;		/* Unknown */
 	uint8	lang;		/* Language ID */
 	uint8	mono;		/* Mono/stereo setting */
 	uint8	autostart;	/* Auto-start setting */
