@@ -486,6 +486,11 @@ typedef struct {
 
 	/* Vertex buffer size (should be a nice round number) */
 	int		vertex_buf_size;
+
+	/* Non-zero if we want to enable vertex DMA mode. Note that
+	   if this is set, then _all_ enabled lists need to have a
+	   vertex buffer assigned. */
+	int		dma_enabled;
 } pvr_init_params_t;
 
 /* Initialize the PVR chip to ready status, enabling the specified lists
@@ -520,12 +525,14 @@ int pvr_get_vbl_count();
 typedef struct pvr_stats {
 	uint32		enabled_list_mask;	/* Which lists are enabled? */
 	uint32		vbl_count;		/* VBlank count */
-	uint32		frame_last_time;	/* Ready-to-Ready length for the last frame in milliseconds */
+	int		frame_last_time;	/* Ready-to-Ready length for the last frame in milliseconds */
 	float		frame_rate;		/* Current frame rate (per second) */
-	uint32		reg_last_time;		/* Registration time for the last frame in milliseconds */
-	uint32		rnd_last_time;		/* Rendering time for the last frame in milliseconds */
-	uint32		vtx_buffer_used;	/* Number of bytes used in the vertex buffer for the last frame */
-	uint32		vtx_buffer_used_max;	/* Number of bytes used in the vertex buffer for the largest frame */
+	int		reg_last_time;		/* Registration time for the last frame in milliseconds */
+	int		rnd_last_time;		/* Rendering time for the last frame in milliseconds */
+	int		vtx_buffer_used;	/* Number of bytes used in the vertex buffer for the last frame */
+	int		vtx_buffer_used_max;	/* Number of bytes used in the vertex buffer for the largest frame */
+	int		buf_last_time;		/* DMA buffer file time for the last frame in milliseconds */
+	uint32		frame_count;		/* Total number of rendered/viewed frames */
 	/* ... more later as it's implemented ... */
 } pvr_stats_t;
 
@@ -652,8 +659,25 @@ void pvr_mem_stats();
 /* Setup a vertex buffer for one of the list types. If the specified list type
    already has a vertex buffer, it will be replaced by the new one; if NULL
    is specified as a buffer location, the list type will be switched to direct
-   mode. The old buffer location will be returned (if any). */
+   mode. The old buffer location will be returned (if any). Note that each
+   buffer should actually be twice as long (to hold two frames' worth of
+   data). The 'len' should be a multiple of 64, and the pointer should be
+   aligned to a 32-byte boundary. 'len' also may not be smaller than 128
+   bytes, even if you have no intention of using the given list. Also you
+   should generally not try to do this at any time besides before a frame
+   is begin, or Bad Things May Happen. */
 void * pvr_set_vertex_buffer(pvr_list_t list, void * buffer, int len);
+
+/* Return a pointer to the current output location in the DMA buffer for
+   the requested list. DMA must globally be enabled for this to work. Data
+   may be added to this buffer by the user program directly. */
+void * pvr_vertbuf_tail(pvr_list_t list);
+
+/* Notify the PVR system that data have been written into the output buffer
+   for the given list. This should always be done after writing data directly
+   to these buffers or it will get overwritten by other data. 'amt' is in
+   bytes and should _always_ be a multiple of 32. */
+void pvr_vertbuf_written(pvr_list_t list, uint32 amt);
 
 /* Begin collecting data for a frame of 3D output to the off-screen
    frame buffer */
@@ -717,7 +741,9 @@ int pvr_list_prim(pvr_list_t list, void * data, int size);
 
 /* Called to flush buffered data of the given list type to the hardware
    processor. If there is no vertex buffer for the given type, then an error
-   (-1) is returned. The list must have been started with pvr_begin_list(). */
+   (-1) is returned. The list must have been started with pvr_begin_list().
+   This is intended to be used later in a "hybrid" mode where both direct
+   and DMA TA submission is possible. */
 int pvr_list_flush(pvr_list_t list);
 
 /* Call this after you have finished submitting all data for a frame; once
@@ -727,7 +753,7 @@ int pvr_list_flush(pvr_list_t list);
 int pvr_scene_finish();
 
 /* Block the caller until the PVR system is ready for another frame to be
-   started. The PVR system allocates enough space for two frames: one in
+   submitted. The PVR system allocates enough space for two frames: one in
    data collection mode, and another in rendering mode. If a frame is 
    currently rendering, and another frame has already been closed, then the
    caller cannot do anything else until the rendering frame completes. Note
@@ -740,7 +766,8 @@ int pvr_wait_ready();
 
 /* Same thing as above, but in non-blocking form; returns -1 if the PVR isn't
    ready; returns 0 when the PVR has accepted your frame and is ready for
-   more. */
+   more. If this returns 0 then you _must_ call pvr_wait_ready afterwards
+   to clear the condition. */
 int pvr_check_ready();
 
 

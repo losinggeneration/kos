@@ -1,7 +1,7 @@
 /* KallistiOS ##version##
        
    pvr_internal.h
-   (C)2002 Dan Potter
+   Copyright (C)2002,2003,2004 Dan Potter
 
  */
 
@@ -17,6 +17,7 @@
    be added to dc/pvr.h. */
 
 #include <kos/sem.h>
+#include <kos/mutex.h>
 
 /**** State stuff ***************************************************/
 
@@ -43,41 +44,71 @@
    structures, but as it overflows the bins for each tile, it must 
    allocate a new block.
 
-   Now one small key point about all this: the buffers are interleaved to
-   make the page numbers match up. Here is an illustration:
+   3D processing proceeds in a pipeline fashion. There are four functional
+   units we have to consider in this process: the main CPU, the tile
+   accelerator, the ISP/TSP, and the visual output.
 
-   +----------------------------------+----------------------------------+
-   |         Buffer 0                 |            Buffer 1              |
-   |                                  |                                  |
-   |  Frame 0      |  Reg. Buffer 0   |  Frame 1        | Reg. Buffer 1  |
-   |               |                  |                 |                |
-   +----------------------------------+----------------------------------+
+   If vertex DMA is enabled, then the TA may optionally be fed by the CPU,
+   which will free it up from stalls that may happen with certain polygons
+   when feeding the TA, as well as enabling other benefits.
 
-   The ISP/TSP and the TA are two independent pieces of the PVR which work
-   in parallel to implement a simple rendering pipeline. While we are
-   registering things with the TA, the ISP/TSP are rendering a frame. So
-   there are three agents at work here: TA registration, ISP/TSP rendering,
-   and an implicit third, the current _view_ frame (what the user is looking
-   at). Here's the combinations this setup uses:
+   So in an ideal situation with no DMA enabled, it looks like this:
 
-   Tick		TA		ISP/TSP			View
-   0		->0		-			0
-   1		->1		rb0->f0			1
-   2		->0		rb1->f1			0
-   3		->1		rb0->f0			1
+   VBlanks	SH4-to-TA	ISP/TSP			View
+   0		->T0		-			-
+   1		->T1		T0->F0			-
+   2		->T0		T1->F1			F0
+   3		->T1		T0->F0			F1
    ...
 
-   So initially the user is viewing frame 0, the ISP/TSP are doing nothing,
-   and the TA is registering into reg buffer 0. When the registration is
-   complete and a SCANINT is received, we switch the view to frame 1 (which
-   is still blank), switch registration to reg buffer 1, and begin rendering
-   from reg buffer 0 to frame buffer 0 (which is hidden). At the next SCANINT,
-   we switch the view to frame 0 again (which now has contents), switch TA
-   registration back to frame 0, and begin rendering from reg buffer 1 into
-   frame 1.
+   When vertex DMA is enabled, we go into a naive 3-stage setup. This can
+   be improved later, but it's a start for now.
 
-   If this is complicated to you, then don't worry. I've been playing with
-   it for over a year now and still barely understand it ^_^;;
+   In this mode, we augment the timing diagram above:
+
+   VBlanks	SH4-to-RAM	DMA-to-TA	ISP/TSP			View
+   0		->R0		-		-			-
+   1		->R1		R0->T0		-			-
+   2		->R0		R1->T1		T0->F0			-
+   3		->R1		R0->T0		T1->F1			F0
+   4		->R0		R1->T1		T0->F0			F1
+   ...
+
+   In the current naive implementation, everything is timed off of vblank
+   interrupts. So the program can write vertices to the RAM buffers as long
+   as it wants. On the first vblank where the current RAM buffers are filled
+   up, DMA proceeds from the filled buffer to the TA. On the first vblank
+   where all the TA transfers have completed, ISP/TSP rendering is started.
+   On the first vblank where a frame has been completed, the view is switched
+   to the frame. Thus everything sort of cascades in natural order when it's
+   ready. This also solves the issue in previous versions where one would
+   write a single frame and it'd never show up unless you push through
+   several more frames. For example, a single frame written would look
+   like this:
+
+   VBlanks	SH4-to-RAM	DMA-to-TA	ISP/TSP			View
+   0		->R0		-		-			-
+   1		-		R0->T0		-			-
+   2		-		-		T0->F0			-
+   3		-		-		-			F0
+
+   Another example, if the CPU spent more than 16msec generating data in the
+   SH4-to-RAM phase, it might look like this at 30fps:
+
+   VBlanks	SH4-to-RAM	DMA-to-TA	ISP/TSP			View
+   0		->R0		-		-			-
+   1		-		R0->T0		-			-
+   2		->R1		-		T0->F0			-
+   3		-		R1->T1		-			F0
+   4		->R0		-		T1->F1			F0
+   5		-		R0->T0		-			F1
+   6		->R1		-		T0->F0			F1
+   ...
+
+   Note that in the case where the potentially bigger frames cause the DMA-to-TA
+   or ISP/TSP phases to take longer than one frame, they are allowed to expand
+   into the next slot gracefully.
+
  */
 
 /* Note that these must match the list types in pvr.h; these are here
@@ -89,66 +120,94 @@
 #define PVR_OPB_PT	4
 #define PVR_OPB_COUNT	5
 
-/* Buffers structure: keeps track of buffers for each frame */
+// TA buffers structure: we have two sets of these
 typedef struct {
 	uint32	vertex, vertex_size;		/* Vertex buffer */
 	uint32	opb, opb_size;			/* Object pointer buffers, size */
 	uint32	opb_type[PVR_OPB_COUNT];	/* Object pointer buffers (of each type) */
 	uint32	tile_matrix, tile_matrix_size;	/* Tile matrix, size */
-	uint32	frame, frame_size;		/* Output frame buffer, size */
-} pvr_buffers_t;
+} pvr_ta_buffers_t;
+
+// DMA buffers structure: we have two sets of these
+typedef struct {
+	uint8	* base[PVR_OPB_COUNT];		// DMA buffers, if assigned
+	uint32	ptr[PVR_OPB_COUNT];		// DMA buffer write pointer, if used
+	uint32	size[PVR_OPB_COUNT];		// DMA buffer sizes, or zero if none
+	int	ready;				// >0 if these buffers are ready to be DMAed
+} pvr_dma_buffers_t;
+
+// Frame buffers structure: we have two sets of these
+typedef struct {
+	uint32	frame, frame_size;		// Output frame buffer, size
+} pvr_frame_buffers_t;
 
 /* PVR status structure; not only will this hold status information,
    but it will also server as the wait object for the frame-complete
    genwaits. */
 typedef struct {
-	/* If this is zero, then this state isn't valid */
+	// If this is zero, then this state isn't valid
 	int		valid;
 
-	/* General runtime config */
-	uint32		list_reg_mask;			/* Active lists register mask */
-	int		view_page;			/* Which frame is being viewed currently */
-	int		opb_open_list;			/* Which list is open for registration, if any? */
-	int		opb_open_list_cnt;		/* Prims submitted in this list */
-	uint32		opb_closed;			/* (1 << idx) for each list which has been closed */
-	uint32		opb_completed;			/* (1 << idx) for each list which has completed registration */
-	uint32		opb_completed_full;		/* opb_completed's value when we're ready to render */
-	int		render_completed;		/* 1 if the last started render has finished */
-	int		flip_completed;			/* 1 if the flip we were waiting on has finished */
-	
-	/* Memory pointers */
-	pvr_buffers_t	buffers[2];			/* Per-frame buffer pointers */
-	uint32		texture_base;			/* Start of texture RAM */
+	// General configuration
+	uint32		lists_enabled;			// opb_completed's value when we're ready to render
+	uint32		list_reg_mask;			// Active lists register mask
+	int		dma_mode;			// 1 if we are using DMA to transfer vertices
 	int		opb_size[PVR_OPB_COUNT];	/* opb size flags */
 	uint32		opb_ind[PVR_OPB_COUNT];		/* Individual opb sizes (in bytes) */
 
-	/* Screen size / clipping constants */
-	int		w, h;				/* Screen width, height */
-	int		tw, th;				/* Screen tile width, height */
-	uint32		tsize_const;			/* Screen tile size constant */
-	float		zclip;				/* Z clip plane */
-	uint32		pclip_left, pclip_right;	/* X pixel clip constants */
-	uint32		pclip_top, pclip_bottom;	/* Y pixel clip constants */
-	uint32		pclip_x, pclip_y;		/* Composited clip constants */
-	uint32		bg_color;			/* Background color in ARGB format */
+	// Pipeline state
+	int		ram_target;			// RAM buffer we're writing into
+							// (^1 == RAM buffer we're DMAing from)
+	int		ta_target;			// TA buffer we're writing (or DMAing) into
+							// (^1 == TA buffer we're rendering from)
+	int		view_target;			// Frame buffer we're viewing
+							// (^1 == frame buffer we're rendering to)
+
+	int		list_reg_open;			// Which list is open for registration, if any? (non-DMA only)
+	uint32		lists_closed;			// (1 << idx) for each list which the SH4 has lost interest in
+	uint32		lists_transferred;		// (1 << idx) for each list which has completely transferred to the TA
+	uint32		lists_dmaed;			// (1 << idx) for each list which has been DMA'd (DMA mode only)
+
+	mutex_t		* dma_lock;			// Locked if a DMA is in progress (vertex or texture)
+	int		render_busy;			// >0 if a render is in progress
+	int		render_completed;		// >1 if a render has recently finished
+	
+	// Memory pointers / buffers
+	pvr_dma_buffers_t	dma_buffers[2];		// DMA buffers (if any)
+	pvr_ta_buffers_t	ta_buffers[2];		// TA buffers
+	pvr_frame_buffers_t	frame_buffers[2];	// Frame buffers
+	uint32			texture_base;		// Start of texture RAM
+
+	// Screen size / clipping constants
+	int		w, h;				// Screen width, height
+	int		tw, th;				// Screen tile width, height
+	uint32		tsize_const;			// Screen tile size constant
+	float		zclip;				// Z clip plane
+	uint32		pclip_left, pclip_right;	// X pixel clip constants
+	uint32		pclip_top, pclip_bottom;	// Y pixel clip constants
+	uint32		pclip_x, pclip_y;		// Composited clip constants
+	uint32		bg_color;			// Background color in ARGB format
 	
 	/* Running statistics on the PVR system. All vars are in terms
 	   of milliseconds. */
-	uint32		vbl_count;			/* VBlank counter for animations and such */
-	uint64		frame_last_time;		/* When did the last frame completion occur? */
-	uint64		reg_start_time;			/* When did the last registration begin? */
-	uint64		rnd_start_time;			/* When did the last render begin? */
-	uint32		frame_last_len;			/* VBlank-to-VBlank length for the last frame (1.0/FrameRate) */
-	uint32		reg_last_len;			/* Registration time for the last frame */
-	uint32		rnd_last_len;			/* Render time for the last frame */
-	uint32		vtx_buf_used;			/* Vertex buffer used size for the last frame */
-	uint32		vtx_buf_used_max;		/* Maximum used vertex buffer size */
+	uint32		vbl_count;			// VBlank counter for animations and such
+	uint32		frame_count;			// Total number of viewed frames
+	uint64		frame_last_time;		// When did the last frame completion occur?
+	uint64		buf_start_time;			// When did the last DMA buffer fill begin?
+	uint64		reg_start_time;			// When did the last registration begin?
+	uint64		rnd_start_time;			// When did the last render begin?
+	int		frame_last_len;			// VBlank-to-VBlank length for the last frame (1.0/FrameRate)
+	int		buf_last_len;			// Cumulative buffer fill time for the last frame
+	int		reg_last_len;			// Registration time for the last frame
+	int		rnd_last_len;			// Render time for the last frame
+	uint32		vtx_buf_used;			// Vertex buffer used size for the last frame
+	uint32		vtx_buf_used_max;		// Maximum used vertex buffer size
 
 	/* Wait-ready semaphore: this will be signaled whenever the pvr_wait_ready()
 	   call should be ready to return. */
 	semaphore_t	* ready_sem;
 
-	/* Handle for the vblank interrupt */
+	// Handle for the vblank interrupt
 	int		vbl_handle;
 } pvr_state_t;
 
@@ -167,6 +226,13 @@ typedef struct pvr_bkg_poly {
 	uint32		argb3;
 } pvr_bkg_poly_t;
 
+// Debug macro, for debugging IRQ wackiness
+#define DBG(x) do { \
+		int o = irq_disable(); \
+		printf x; \
+		irq_restore(o); \
+	} while(0)
+
 /**** pvr_buffers.c ***************************************************/
 
 /* Initialize buffers for TA/ISP/TSP usage */
@@ -183,17 +249,19 @@ void pvr_init_tile_matrices();
 
 /* What event is happening (for pvr_sync_stats)? */
 #define PVR_SYNC_VBLANK		1	/* VBlank IRQ */
-#define PVR_SYNC_REGSTART	2	/* Registration started */
-#define PVR_SYNC_REGDONE	3	/* Registration complete */
-#define PVR_SYNC_RNDSTART	4	/* Render started */
-#define PVR_SYNC_RNDDONE	5	/* Render complete IRQ */
-#define PVR_SYNC_VBLRNDDONE	6	/* VBlank + Render complete */
+#define PVR_SYNC_BUFSTART	2	/* DMA buffer fill started */
+#define PVR_SYNC_BUFDONE	3	/* DMA buffer fill complete */
+#define PVR_SYNC_REGSTART	4	/* Registration started */
+#define PVR_SYNC_REGDONE	5	/* Registration complete */
+#define PVR_SYNC_RNDSTART	6	/* Render started */
+#define PVR_SYNC_RNDDONE	7	/* Render complete IRQ */
+#define PVR_SYNC_PAGEFLIP	8	/* View page was flipped */
 
 /* Update statistical counters */
 void pvr_sync_stats(int event);
 
 /* Synchronize the viewed page with what's in pvr_state */
-void pvr_sync_view_page();
+void pvr_sync_view();
 
 /* Synchronize the registration buffer with what's in pvr_state */
 void pvr_sync_reg_buffer();
@@ -204,6 +272,9 @@ void pvr_begin_queued_render();
 /* Generate synthetic polygon headers for the given list type (to submit
    blank lists that the user forgot) */
 void pvr_blank_polyhdr(int type);
+
+/* Same as above, but generates into a buffer instead of submitting. */
+void pvr_blank_polyhdr_buf(int type, pvr_poly_hdr_t * buf);
    
 
 /**** pvr_irq.c *******************************************************/

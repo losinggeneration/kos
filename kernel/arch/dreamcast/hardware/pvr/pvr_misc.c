@@ -44,7 +44,7 @@ int pvr_get_stats(pvr_stats_t *stat) {
 
 	assert(stat != NULL);
 
-	stat->enabled_list_mask = pvr_state.opb_completed_full;
+	stat->enabled_list_mask = pvr_state.lists_enabled;
 	stat->vbl_count = pvr_state.vbl_count;
 	stat->frame_last_time = pvr_state.frame_last_len;
 	stat->reg_last_time = pvr_state.reg_last_len;
@@ -55,6 +55,8 @@ int pvr_get_stats(pvr_stats_t *stat) {
 		stat->frame_rate = -1.0f;
 	stat->vtx_buffer_used = pvr_state.vtx_buf_used;
 	stat->vtx_buffer_used_max = pvr_state.vtx_buf_used_max;
+	stat->buf_last_time = pvr_state.buf_last_len;
+	stat->frame_count = pvr_state.frame_count;
 
 	return 0;
 }
@@ -64,7 +66,7 @@ int pvr_get_stats(pvr_stats_t *stat) {
 /* Update statistical counters */
 void pvr_sync_stats(int event) {
 	uint64	t;
-	volatile pvr_buffers_t	*buf;
+	volatile pvr_ta_buffers_t *buf;
 
 
 	/* Get the current time */
@@ -82,7 +84,7 @@ void pvr_sync_stats(int event) {
 	case PVR_SYNC_REGDONE:
 		pvr_state.reg_last_len = (uint32)(t - pvr_state.reg_start_time);
 
-		buf = pvr_state.buffers + pvr_state.view_page;
+		buf = pvr_state.ta_buffers + pvr_state.ta_target;
 		pvr_state.vtx_buf_used = PVR_GET(PVR_TA_VERTBUF_POS) - buf->vertex;
 		if (pvr_state.vtx_buf_used > pvr_state.vtx_buf_used_max)
 			pvr_state.vtx_buf_used_max = pvr_state.vtx_buf_used;
@@ -96,24 +98,33 @@ void pvr_sync_stats(int event) {
 		pvr_state.rnd_last_len = (uint32)(t - pvr_state.rnd_start_time);
 		break;
 
-	case PVR_SYNC_VBLRNDDONE:
+	case PVR_SYNC_BUFSTART:
+		pvr_state.buf_start_time = t;
+		break;
+
+	case PVR_SYNC_BUFDONE:
+		pvr_state.buf_last_len = (uint32)(t - pvr_state.buf_start_time);
+		break;
+
+	case PVR_SYNC_PAGEFLIP:
 		pvr_state.frame_last_len = (uint32)(t - pvr_state.frame_last_time);
 		pvr_state.frame_last_time = t;
+		pvr_state.frame_count++;
 		break;
 
 	}
 }
 
 /* Synchronize the viewed page with what's in pvr_state */
-void pvr_sync_view_page() {
-	vid_set_start(pvr_state.buffers[pvr_state.view_page].frame);
+void pvr_sync_view() {
+	vid_set_start(pvr_state.frame_buffers[pvr_state.view_target].frame);
 }
 
 /* Synchronize the registration buffer with what's in pvr_state */
 void pvr_sync_reg_buffer() {
-	volatile pvr_buffers_t	*buf;
+	volatile pvr_ta_buffers_t *buf;
 
-	buf = pvr_state.buffers + pvr_state.view_page;
+	buf = pvr_state.ta_buffers + pvr_state.ta_target;
 
 	/* Reset TA */
 	PVR_SET(PVR_RESET, PVR_RESET_TA);
@@ -133,23 +144,26 @@ void pvr_sync_reg_buffer() {
 	(void)PVR_GET(PVR_TA_INIT);
 }
 
-/* Begin a render operation that has been queued completely */
+/* Begin a render operation that has been queued completely (i.e., the
+   opposite of ta_target) */
 void pvr_begin_queued_render() {
-	pvr_bkg_poly_t		bkg;
-	volatile pvr_buffers_t	*buf;
-	uint32			*vrl, *bkgdata;
-	uint32			vert_end;
-	int			i;
+	volatile pvr_ta_buffers_t	* tbuf;
+	volatile pvr_frame_buffers_t	* rbuf;
+	pvr_bkg_poly_t	bkg;
+	uint32		*vrl, *bkgdata;
+	uint32		vert_end;
+	int		i;
 
 	/* Get the appropriate buffer */
-	buf = pvr_state.buffers + (pvr_state.view_page ^ 1);
+	tbuf = pvr_state.ta_buffers + (pvr_state.ta_target ^ 1);
+	rbuf = pvr_state.frame_buffers + (pvr_state.view_target ^ 1);
 
 	/* Calculate background value for below */
 	/* Small side note: during setup, the value is originally
 	   0x01203000... I'm thinking that the upper word signifies
 	   the length of the background plane list in dwords
 	   shifted up by 4. */
-	vert_end = 0x01000000 | ((PVR_GET(PVR_TA_VERTBUF_POS) - buf->vertex) << 1);
+	vert_end = 0x01000000 | ((PVR_GET(PVR_TA_VERTBUF_POS) - tbuf->vertex) << 1);
 	
 	/* Throw the background data on the end of the TA's list */
 	bkg.flags1 = 0x90800000;	/* These are from libdream.. ought to figure out */
@@ -169,10 +183,10 @@ void pvr_begin_queued_render() {
 	PVR_SET(PVR_RESET, PVR_RESET_NONE);
 
 	/* Finish up rendering the current frame (into the other buffer) */
-	PVR_SET(PVR_ISP_TILEMAT_ADDR, buf->tile_matrix);
-	PVR_SET(PVR_ISP_VERTBUF_ADDR, buf->vertex);
+	PVR_SET(PVR_ISP_TILEMAT_ADDR, tbuf->tile_matrix);
+	PVR_SET(PVR_ISP_VERTBUF_ADDR, tbuf->vertex);
 	//if (!to_texture)
-		PVR_SET(PVR_RENDER_ADDR, buf->frame);
+		PVR_SET(PVR_RENDER_ADDR, rbuf->frame);
 	/* else {
 		SETREG(0x8060, to_txr_addr | (1<<24));
 		SETREG(0x8064, to_txr_addr | (1<<24));
@@ -188,27 +202,27 @@ void pvr_begin_queued_render() {
 	// XXX Do we _really_ need this every time?
 	// SETREG(PVR_FB_CFG_2, 0x00000009);		/* Alpha mode */
 	PVR_SET(PVR_ISP_START, PVR_ISP_START_GO);	/* Start render */
-
-	pvr_sync_stats(PVR_SYNC_RNDSTART);
 }
 
-/* Generate synthetic polygon headers for the given list type (to submit
-   blank lists that the user forgot) */
 void pvr_blank_polyhdr(int type) {
 	pvr_poly_hdr_t poly;
 
-	/* Empty it out */
-	memset(&poly, 0, sizeof(poly));
+	// Make it.
+	pvr_blank_polyhdr_buf(type, &poly);
 
-	/* Put in the list type */
-	poly.cmd = (type << PVR_TA_CMD_TYPE_SHIFT) | 0x80840012;
-
-	/* Fill in dummy values */
-	poly.d1 = poly.d2 = poly.d3 = poly.d4 = 0xffffffff;
-
-	/* Submit it */
+	// Submit it
 	pvr_prim(&poly, sizeof(poly));
 }
 
+void pvr_blank_polyhdr_buf(int type, pvr_poly_hdr_t * poly) {
+	/* Empty it out */
+	memset(poly, 0, sizeof(pvr_poly_hdr_t));
 
+	/* Put in the list type */
+	poly->cmd = (type << PVR_TA_CMD_TYPE_SHIFT) | 0x80840012;
+
+	/* Fill in dummy values */
+	poly->d1 = poly->d2 = poly->d3 = poly->d4 = 0xffffffff;
+
+}
 

@@ -1,7 +1,7 @@
 /* KallistiOS ##version##
 
    pvr_init_shutdown.c
-   (C)2002 Dan Potter
+   Copyright (C)2002,2004 Dan Potter
 
  */
 
@@ -32,7 +32,10 @@ int pvr_init_defaults() {
 		{ PVR_BINSIZE_16, PVR_BINSIZE_0, PVR_BINSIZE_16, PVR_BINSIZE_0, PVR_BINSIZE_0 },
 
 		/* Vertex buffer size 512K */
-		512*1024
+		512*1024,
+
+		/* No DMA */
+		0
 	};
 
 	return pvr_init(&params);
@@ -73,28 +76,35 @@ int pvr_init(pvr_init_params_t *params) {
 	/* Start off with a nice empty structure */
 	memset((void *)&pvr_state, 0, sizeof(pvr_state));
 
+	// Enable DMA if the user wants that.
+	pvr_state.dma_mode = params->dma_enabled;
+
 	/* Everything's clear, do the initial buffer pointer setup */
 	pvr_allocate_buffers(params);
 
-	/* We don't have any valid frames, but we'll do this to avoid seeing
-	   any startup artifacts. */
-	pvr_state.view_page = 0;
-	pvr_sync_view_page();
-
-	/* Initialize tile matrices */
+	// Initialize tile matrices
 	pvr_init_tile_matrices();
+
+	// Setup all pipeline targets. Yes, this is redundant. :) I just
+	// like to have it explicit.
+	pvr_state.ram_target = 0;
+	pvr_state.ta_target = 0;
+	pvr_state.view_target = 0;
+	
+	pvr_state.list_reg_open = -1;
+
+	// Sync all the hardware registers with our pipeline state.
+	pvr_sync_view();
 	pvr_sync_reg_buffer();
 
-	/* Set the ISP/TSP as idle */
-	pvr_state.render_completed = 1;
-	pvr_state.flip_completed = 1;
-
-	/* Clear out our stats */
+	// Clear out our stats
 	pvr_state.vbl_count = 0;
 	pvr_state.frame_last_time = 0;
+	pvr_state.buf_start_time = 0;
 	pvr_state.reg_start_time = 0;
 	pvr_state.rnd_start_time = 0;
 	pvr_state.frame_last_len = -1;
+	pvr_state.buf_last_len = -1;
 	pvr_state.reg_last_len = -1;
 	pvr_state.rnd_last_len = -1;
 	pvr_state.vtx_buf_used = 0;
@@ -141,6 +151,7 @@ int pvr_init(pvr_init_params_t *params) {
 	PVR_SET(PVR_UNK_0118, 0x00008040);		/* M */
 
 	/* Initialize PVR DMA */
+	pvr_state.dma_lock = mutex_create();
 	pvr_dma_init();
 
 	/* Setup our wait-ready semaphore */
@@ -190,6 +201,7 @@ int pvr_shutdown() {
 
 	/* Destroy the semaphore */
 	sem_destroy(pvr_state.ready_sem);
+	mutex_destroy(pvr_state.dma_lock);
 
 	/* Clear video memory */
 	vid_empty();

@@ -13,6 +13,8 @@
 #include <kos/thread.h>
 #include <kos/sem.h>
 
+#include "pvr_internal.h"
+
 /* Modified for inclusion into KOS by Dan Potter */
 
 CVSID("$Id: pvr_dma.c,v 1.5 2003/02/25 07:39:37 bardtx Exp $");
@@ -44,11 +46,19 @@ static void pvr_dma_irq_hnd(uint32 code) {
 	if (shdma[DMAC_DMATCR2] != 0)
 		dbglog(DBG_INFO,"pvr_dma: The dma did not complete successfully\n");
 
+	DBG(("pvr_dma_irq_hnd\n"));
+
 	// Call the callback, if any.
 	if (dma_callback) {
-		dma_callback(dma_cbdata);
+		// This song and dance is necessary because the handler
+		// could chain to itself.
+		pvr_dma_callback_t cb = dma_callback;
+		ptr_t d = dma_cbdata;
+
 		dma_callback = NULL;
 		dma_cbdata = 0;
+
+		cb(d);
 	}
 	
 	// Signal the calling thread to continue, if any.

@@ -1,7 +1,7 @@
 /* KallistiOS ##version##
 
    pvr_buffers.c
-   (C)2002 Dan Potter
+   Copyright (C)2002,2004 Dan Potter
 
  */
 
@@ -26,14 +26,14 @@ CVSID("$Id: pvr_buffers.c,v 1.6 2003/04/24 03:10:54 bardtx Exp $");
    the rendering structures there. Each tile of the screen (32x32) receives
    a small buffer space. */
 void pvr_init_tile_matrix(int which) {
-	int			x, y;
-	uint32			*vr;
-	volatile pvr_buffers_t	*buf;
-	volatile int		*opbs;
-	uint32			matbase, opbbase;
+	volatile pvr_ta_buffers_t	*buf;
+	int		x, y;
+	uint32		*vr;
+	volatile int	*opbs;
+	uint32		matbase, opbbase;
 
 	vr = (uint32*)PVR_RAM_BASE;
-	buf = pvr_state.buffers + which;
+	buf = pvr_state.ta_buffers + which;
 	opbs = pvr_state.opb_size;
 
 	matbase = buf->tile_matrix;
@@ -54,7 +54,7 @@ void pvr_init_tile_matrix(int which) {
 	vr += 6;
 	
 	/* Now the main tile matrix */
-#ifndef NDEBUG
+#if 0
 	dbglog(DBG_KDEBUG, "  Using poly buffers %08lx/%08lx/%08lx/%08lx/%08lx\r\n",
 		buf->opb_type[0],
 		buf->opb_type[1],
@@ -101,16 +101,7 @@ void pvr_init_tile_matrices() {
 
 /* Allocate PVR buffers given a set of parameters
 
-This is a little bit confusing so I'll clarify here:
-- The registration process takes place into the buffer which is currently
-  being displayed to the user. This is ok since registration doesn't affect
-  the output display.
-- The rendering process takes places into the buffer which is not being
-  displayed. This is also ok since the user can't see this taking place.
-
-So the "frame" that goes with a given set of buffers is not actually the frame
-where that data will be rendered, it's the view frame that goes along with
-registration into that buffer.
+There's some confusion in here that is explained more fully in pvr_internal.h.
 
 The other confusing thing is that texture ram is a 64-bit multiplexed space
 rather than a copy of the flat 32-bit VRAM. So in order to maximize the
@@ -121,9 +112,10 @@ up and placed at 0x000000 and 0x400000.
 #define BUF_ALIGN 128
 #define BUF_ALIGN_MASK (BUF_ALIGN - 1)
 void pvr_allocate_buffers(pvr_init_params_t *params) {
-	int			i, j;
-	uint32			outaddr, polybuf, sconst, polybuf_alloc;
-	volatile pvr_buffers_t	*buf;
+	volatile pvr_ta_buffers_t	*buf;
+	volatile pvr_frame_buffers_t	*fbuf;
+	int	i, j;
+	uint32	outaddr, polybuf, sconst, polybuf_alloc;
 
 	/* Set screen sizes; pvr_init has ensured that we have a valid mode
 	   and all that by now, so we can freely dig into the vid_mode
@@ -166,8 +158,8 @@ void pvr_allocate_buffers(pvr_init_params_t *params) {
 		}
 
 		if (sconst > 0) {
+			pvr_state.lists_enabled |= (1 << i);
 			pvr_state.list_reg_mask |= sconst << (4 * i);
-			pvr_state.opb_completed_full |= (1 << i);
 		}
 	}
 	
@@ -179,8 +171,11 @@ void pvr_allocate_buffers(pvr_init_params_t *params) {
 		else
 			outaddr = 0x400000;
 
-		/* Select a pvr_buffers_t */
-		buf = pvr_state.buffers + i;
+		/* Select a pvr_buffers_t. Note that there's no good reason
+		   to allocate the frame buffers at the same time as the TA
+		   buffers except that it's handy to do it all in one place. */
+		buf = pvr_state.ta_buffers + i;
+		fbuf = pvr_state.frame_buffers + i;
 	
 		/* Vertex buffer */
 		buf->vertex = outaddr;
@@ -220,9 +215,9 @@ void pvr_allocate_buffers(pvr_init_params_t *params) {
 		outaddr = (outaddr + BUF_ALIGN_MASK) & ~BUF_ALIGN_MASK;
 		
 		/* Output buffer */
-		buf->frame = outaddr;
-		buf->frame_size = pvr_state.w * pvr_state.h * 2;
-		outaddr += buf->frame_size;
+		fbuf->frame = outaddr;
+		fbuf->frame_size = pvr_state.w * pvr_state.h * 2;
+		outaddr += fbuf->frame_size;
 		
 		/* N-byte align */
 		outaddr = (outaddr + BUF_ALIGN_MASK) & ~BUF_ALIGN_MASK;
@@ -231,11 +226,12 @@ void pvr_allocate_buffers(pvr_init_params_t *params) {
 	/* Texture ram is whatever is left */
 	pvr_state.texture_base = (outaddr - 0x400000) * 2;
 
-#ifndef NDEBUG	
+#if 0
 	dbglog(DBG_KDEBUG, "pvr: initialized PVR buffers:\n");
 	dbglog(DBG_KDEBUG, "  texture RAM begins at %08lx\n", pvr_state.texture_base);
 	for (i=0; i<2; i++) {		
-		buf = pvr_state.buffers+i;
+		buf = pvr_state.ta_buffers+i;
+		fbuf = pvr_state.frame_buffers+i;
 		dbglog(DBG_KDEBUG, "  vertex/vertex_size: %08lx/%08lx\n", buf->vertex, buf->vertex_size);
 		dbglog(DBG_KDEBUG, "  opb base/opb_size: %08lx/%08lx\n", buf->opb, buf->opb_size);
 		dbglog(DBG_KDEBUG, "  opbs per type: %08lx %08lx %08lx %08lx %08lx\n",
@@ -245,7 +241,7 @@ void pvr_allocate_buffers(pvr_init_params_t *params) {
 			buf->opb_type[3],
 			buf->opb_type[4]);
 		dbglog(DBG_KDEBUG, "  tile_matrix/tile_matrix_size: %08lx/%08lx\n", buf->tile_matrix, buf->tile_matrix_size);
-		dbglog(DBG_KDEBUG, "  frame/frame_size: %08lx/%08lx\n", buf->frame, buf->frame_size);
+		dbglog(DBG_KDEBUG, "  frame/frame_size: %08lx/%08lx\n", fbuf->frame, fbuf->frame_size);
 	}
 	
 	dbglog(DBG_KDEBUG, "  list_mask %08lx\n", pvr_state.list_reg_mask);
@@ -260,7 +256,7 @@ void pvr_allocate_buffers(pvr_init_params_t *params) {
 	dbglog(DBG_KDEBUG, "  zclip %08lx\n", *((uint32*)&pvr_state.zclip));
 	dbglog(DBG_KDEBUG, "  pclip_left/right %08lx/%08lx\n", pvr_state.pclip_left, pvr_state.pclip_right);
 	dbglog(DBG_KDEBUG, "  pclip_top/bottom %08lx/%08lx\n", pvr_state.pclip_top, pvr_state.pclip_bottom);
-	dbglog(DBG_KDEBUG, "  opb_completed_full %08lx\n", pvr_state.opb_completed_full);
+	dbglog(DBG_KDEBUG, "  lists_enabled %08lx\n", pvr_state.lists_enabled);
 	dbglog(DBG_KDEBUG, "Free texture memory: %ld bytes\n",
 		0x800000 - pvr_state.texture_base);
 #endif	/* !NDEBUG */
