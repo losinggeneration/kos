@@ -1,7 +1,7 @@
 /* KallistiOS ##version##
 
    mconst.h
-   Copyright (C)2002 Nick Kochakian
+   Copyright (C)2002, 2004 Nick Kochakian
 
    Distributed under the terms of the KOS license.
 
@@ -21,6 +21,7 @@
    in modem.h! */
 
 /* Speeds */
+#define MODEM_SPEED_AUTO  0x0
 #define MODEM_SPEED_1200  0x0
 #define MODEM_SPEED_2400  0x1
 #define MODEM_SPEED_4800  0x2
@@ -44,6 +45,7 @@
 #define MODEM_PROTOCOL_V32    0x3
 #define MODEM_PROTOCOL_V32BIS 0x4
 #define MODEM_PROTOCOL_V34    0x5
+#define MODEM_PROTOCOL_V8     0x6
 
 #define MODEM_SPEED_GET_PROTOCOL(x) ((modem_speed_t)(x) >> 4)
 #define MODEM_SPEED_GET_SPEED(x)    ((modem_speed_t)(x) & 0xF)

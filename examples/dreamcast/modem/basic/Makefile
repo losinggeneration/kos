@@ -3,9 +3,9 @@
 # Copyright (C)2003 Nick Kochakian
 #   
 
-TARGET = ex.elf
+TARGET = example1.elf
 
-OBJS = ex.o
+OBJS = example1.o
 
 all: rm-elf $(TARGET)
 
@@ -18,8 +18,7 @@ rm-elf:
 	-rm -f $(TARGET) romdisk.*
 
 $(TARGET): $(OBJS)
-	$(KOS_CC) $(KOS_CFLAGS) $(KOS_LDFLAGS) -o $(TARGET) $(KOS_START) \
-		$(OBJS) $(OBJEXTRA) $(KOS_LIBS)
+	kos-cc -o $(TARGET) $(OBJS)
 
 run: $(TARGET)
 	$(KOS_LOADER) $(TARGET)

@@ -1,7 +1,7 @@
 /* KallistiOS ##version##
 
    modem.c
-   Copyright (C)2002 Nick Kochakian
+   Copyright (C)2002, 2004 Nick Kochakian
 
    Distributed under the terms of the KOS license.
 */
@@ -10,7 +10,7 @@
 #include <dc/g2bus.h>
 #include <stdlib.h>
 #include <assert.h>
-#include <dc/modem/modem.h>
+#include "dc/modem/modem.h"
 #include "mintern.h"
 
 CVSID("$Id: modem.c,v 1.1 2003/05/23 02:04:42 bardtx Exp $");
@@ -18,18 +18,28 @@ CVSID("$Id: modem.c,v 1.1 2003/05/23 02:04:42 bardtx Exp $");
 /* These timeout values are not exact! */
 #define MODEM_215MS_TIMEOUT 8
 
-void modemQuickReset(void); /* Does a hard reset on the modem but doesn't
-                               configure anything */
+void modemHardReset(void);
+void modemSoftReset(void);
 void modemConfigurationReset(void); /* Configures the modem. It's assumed that
                                        the modem has already been reset. */
 
-MODEM_CFG modemCfg = { 0, MODEM_MODE_NULL, 0, 0, 1,
-                       { 0, MODEM_STATE_NULL, 0, 0 } };
+MODEM_CFG modemCfg = { 0, 0,
+                       { 0, 0, 0 },
+                       NULL,
+                       { 0, MODEM_STATE_NULL, 0 },
+                       { 0, 0 } };
+
+/* Internal flags shared to keep track of parts of the driver's state */
+unsigned char modemInternalFlags = 0;
 
 /* Converts a protocol/speed constant to a value that can be used with the
    CONF register to configure the modem. A value of zero is equal to an
-   undefined speed. */
-static unsigned char modemSpeedConfig[8][15] = {
+   undefined speed.
+
+   This only covers configuration codes for v.17, v.22, v.22 bis, v.32, and
+   v.32 bis protocols. */
+const unsigned char modemSpeedConfig[7][15] =
+{
     /* V.17 protocol */
     /* 1200  2400  4800  7200  9600  12000 14400 16800 19200 21600 */
     {  0,    0,    0,    0xB8, 0xB4, 0xB2, 0xB1, 0,    0,    0,
@@ -64,28 +74,26 @@ static unsigned char modemSpeedConfig[8][15] = {
 
     /* 24000 26400 28000 31200 33600 */
        0,    0,    0,    0,    0  },
-
-    /* V.34 protocol */
-    /* Auto  2400  4800  7200  9600  12000 14400 16800 19200 21600 */
-    {  0,    0xC1, 0xC2, 0xC3, 0xC4, 0xC5, 0xC6, 0xC7, 0xC8, 0xC9,
-
-    /* 24000 26400 28000 31200 33600 */
-       0xCA, 0xCB, 0xCC, 0xCD, 0xCE }
 };
 
 /* Converts the value found in the SPEED register (0Eh:4-0) to a numerical
    value in bits per second (bps.) */
-unsigned long modemBPSConstants[31] = {
+const unsigned short modemBPSConstants[31] =
+{
     300,   600,   1200,  2400,  4800,  9600,  12000, 14400, 7200,  16800,
     19200, 21600, 24000, 26400, 28800, 31200, 33600, 0,     0,     0,
     0,     0,     0,     0,     0,     0,     0,     0,     0,     0,
     0
 };
 
-/* Cleardown configuration code table, which is different for each protocol */
-static unsigned char modemCleardownCodes[] =
-    /* v.17 v.22 v.22bis v.32  v.32bis v.34 */
-    {  0,   0,   0,      0x70, 0x70,   0xC0 };
+/* Converts a MODEM_SPEED_* constant into a value in bits per second */
+__inline unsigned short speedCodeToBPS(unsigned char speed)
+{
+    if (speed==MODEM_SPEED_1200)
+       return 1200;
+
+    return (unsigned short)speed * 2400;
+}
 
 unsigned char modemTimeout = 0;
 
@@ -96,6 +104,152 @@ int __isLessThan(int x, int y)
     return (x < y) ? 1 : 0;
 }
 
+/* Sets the members of a MODEM_CINFO structure based on the defined protocol
+   and speed values */
+void modemCreateCInfoFromPS(const unsigned char protocol,
+                            const unsigned char speed, MODEM_CINFO *cInfo)
+{
+     assert(speed >= 0 && speed <= 15);
+
+     cInfo->protocol = protocol;
+     cInfo->speed    = speed;
+     cInfo->bps      = speedCodeToBPS(cInfo->speed);
+}
+
+/* Sets the members of a MODEM_CINFO structure based on a configuration code
+   from CONF */
+void modemCreateCInfoFromCC(const unsigned char cc, MODEM_CINFO *cInfo)
+{
+     /*
+        v.17     -> 0xB1 - 0xB2, 0xB4, and 0xB8
+        v.22     -> 0x52
+        v.22 bis -> 0x82 and 0x84
+        v.32     -> 0x71 and 0x75
+        v.32 bis -> 0x72, 0x76, and 0x78
+        v.34     -> 0xC1 - 0xCE
+     */
+
+     if ((cc >= 0xB1 && cc <= 0xB4) || cc==0xB8)
+     {
+        /* v.17 */
+        cInfo->protocol = MODEM_PROTOCOL_V17;
+
+        if (cc != 0xB8)
+        {
+           /* 0xB1 - 0xB4 = 14400 - 9600 bps */
+           cInfo->speed = MODEM_SPEED_14400 - ((cc - 0xB0) >> 1); /* cc = [0, 2] */
+        } else
+        {
+           /* 0xB8 = 7200 bps */
+           cInfo->speed = MODEM_SPEED_7200;
+        }
+     } else if (cc==0x52)
+     {
+               /* v.22 */
+               cInfo->protocol = MODEM_PROTOCOL_V22;
+               cInfo->speed    = MODEM_SPEED_1200;
+     } else if (cc==0x82 || cc==0x84)
+     {
+               /* v.22 bis */
+               cInfo->protocol = MODEM_PROTOCOL_V22BIS;
+               cInfo->speed    = (cc==0x82) ? MODEM_SPEED_1200 :
+                                              MODEM_SPEED_2400;
+     } else if (cc==0x71 || cc==0x75)
+     {
+               /* v.32 */
+               cInfo->protocol = MODEM_PROTOCOL_V32;
+               cInfo->speed    = (cc==0x71) ? MODEM_SPEED_4800 :
+                                              MODEM_SPEED_9600;
+     } else if (cc==0x72 || cc==0x76 || cc==0x78)
+     {
+               /* v.32 bis */
+               cInfo->protocol = MODEM_PROTOCOL_V32BIS;
+
+               if (cc==0x72)
+                  cInfo->speed = MODEM_SPEED_12000;
+                  else if (cc==0x76)
+                          cInfo->speed = MODEM_SPEED_14400;
+                  else
+                  cInfo->speed = MODEM_SPEED_7200;
+     } else if (cc >= 0xC1 && cc <= 0xCE)
+     {
+               /* v.34 */
+               cInfo->protocol = MODEM_PROTOCOL_V34;
+               cInfo->speed    = cc - 0xC0;
+     } else
+     {
+        cInfo->protocol = 0;
+        cInfo->speed    = 0;
+     }
+
+     /* Translate the speed code into bits per second */
+     cInfo->bps = speedCodeToBPS(cInfo->speed);
+}
+
+/* Gets the closest possible configuration code based on the values specified
+   by the protocol and data rate */
+unsigned char modemGetCCFromProtocolAndDataRate(const unsigned char protocol,
+                                                const unsigned short bps)
+{
+     unsigned char cc = 0;
+
+     switch (protocol)
+     {
+            case MODEM_PROTOCOL_V17:
+                 if (bps <= 7200) /* Min */
+                    cc = 0xB8;   /* 7200 bps */
+                    else if (bps >= 14400) /* Max */
+                            cc = 0xB1;     /* 14400 bps */
+                    else
+                    {
+                        if (bps==9600)
+                           cc = 0xB4;
+                           else
+                           cc = 0xB2; /* 12000 bps */
+                    }
+            break;
+
+            case MODEM_PROTOCOL_V22:
+                 cc = 0x52; /* 1200 bps */
+            break;
+
+            case MODEM_PROTOCOL_V22BIS:
+                 if (bps <= 1200)
+                    cc = 0x82;
+                    else
+                    cc = 0x84; /* 2400 bps */
+            break;
+
+            case MODEM_PROTOCOL_V32:
+                 if (bps <= 4800)
+                    cc = 0x71;
+                    else
+                    cc = 0x75; /* 9600 bps */
+            break;
+
+            case MODEM_PROTOCOL_V32BIS:
+                 if (bps <= 7200)
+                    cc = 0x78;
+                    else if (bps >= 14400)
+                            cc = 0x76;
+                    else
+                    cc = 0x72; /* 12000 bps */
+            break;
+
+            case MODEM_PROTOCOL_V34:
+                 cc = (bps / 2400) + 0xC0;
+                 if (cc < 0xC1)
+                    cc = 0xC1;
+                    else if (cc > 0xCE)
+                            cc = 0xCE;
+            break;
+     }
+
+     assert(cc);
+
+     return cc;
+}
+
 void modemTimeoutIncCallback(void)
 {
      modemTimeout++;
@@ -104,7 +258,7 @@ void modemTimeoutIncCallback(void)
 /* Verifys if the controller data returned as a result of a reset is valid
    or not. Returns zero if the results are invalid other a non zero number
    is returned. */
-static __inline int verifyControllerData(unsigned short *ctrlInfo)
+__inline int verifyControllerData(unsigned short *ctrlInfo)
 {
        /* RAM1 and RAM2 Checksums */
        if ((ctrlInfo[0]==0xEA3C || ctrlInfo[0]==0x451) &&
@@ -130,7 +284,7 @@ static __inline int verifyControllerData(unsigned short *ctrlInfo)
 
 /* Does the same thing as verifyControllerData but checks to see if the DSP
    values from the DSP self test are valid. */
-static __inline int verifyDSPData(unsigned short *dspInfo)
+__inline int verifyDSPData(unsigned short *dspInfo)
 {
        /* EC Checksum */
        if (dspInfo[0]==0xF083 || dspInfo[0]==0xA577)
@@ -194,6 +348,7 @@ int modemSelfTest(void)
     */
 
     modemIntSetupTimeoutTimer(MODEM_215MS_TIMEOUT, &modemTimeout, NULL);
+    modemTimeout = 0;
 
     /* Soft reset */
     modemSetBits(REGLOC(0x1A), 0x80);
@@ -248,7 +403,7 @@ int modemSelfTest(void)
                                     last. */
     while ((modemRead(REGLOC(0x1F)) & 0x1) && !modemTimeout);
     modemIntResetTimeoutTimer();
-    timer_spin_sleep(10); /* Wait for 10ms before accessing the MDP again */
+    timer_spin_sleep(50); /* Wait for 10ms before accessing the MDP again */
 
     modemIntShutdownTimeoutTimer();
 
@@ -265,24 +420,36 @@ int modemSelfTest(void)
     return 0;
 }
 
+/* Modem initialization
+   Does a self test to detect the presence of a modem, then
+   resets the modem and sets up the default interrupt handler
+   and buffers if one was found
+
+   Returns a non-zero value on success */
 int modem_init(void)
 {
     if (modemCfg.inited)
        return 1;
 
-    modemQuickReset();
+    modemHardReset();
 
     if (!modemSelfTest())
        return 0;
 
-    atexit(modem_shutdown);
+    /* Only need to call atexit once */
+    if (!(modemInternalFlags & MODEM_INTERNAL_FLAG_INIT_ATEXIT))
+    {
+       atexit(modem_shutdown);
+       modemInternalFlags |= MODEM_INTERNAL_FLAG_INIT_ATEXIT;
+    }
 
     modemDataSetupBuffers();
 
     modemIntInit();
-    modem_reset();
+    modemConfigurationReset();
 
-    modemCfg.inited = 1;
+    modemCfg.eventHandler = NULL;
+    modemCfg.inited       = 1;
 
     return 1;
 }
@@ -292,13 +459,13 @@ void modem_shutdown(void)
      if (!modemCfg.inited)
         return;
 
-     modemQuickReset();
+     modemHardReset();
      modemDataDestroyBuffers();
 
      modemCfg.inited = 0;
 }
 
-void modemQuickReset(void)
+void modemHardReset(void)
 {
      /* This zeroes out all of the modem's registers */
      modemWrite(G2_8BP_RST, 0);
@@ -313,13 +480,21 @@ void modemQuickReset(void)
      timer_spin_sleep(150);
 }
 
+void modemSoftReset(void)
+{
+     modemSetBits(REGLOC(0x1A), 0x80); /* Set SFRES */
+     modemSetBits(REGLOC(0x1F), 0x1);  /* Set NEWC */
+
+     while (modemRead(REGLOC(0x1F)) & 0x1); /* Wait for NEWC to clear */
+
+     /* Wait a minimum of 10ms before using the MDP again */
+     timer_spin_sleep(100);
+}
+
 void modemConfigurationReset(void)
 {
      /* Reset the configuration */
-     modemCfg.state             = MODEM_MODE_NULL;
-     modemCfg.actual.connecting = 0;
-     modemCfg.actual.connected  = 0;
-     modemCfg.lockData          = 1;
+     modemCfg.flags = 0;
 
      /* Configure modem interrupt events */
      modemIntConfigModem();
@@ -327,134 +502,221 @@ void modemConfigurationReset(void)
 
 void modem_reset(void)
 {
-     modemQuickReset();
+     modemSoftReset();
      modemConfigurationReset();
+     modemDataClearBuffers();
+}
+
+/* Sets the v.8 configuration registers and the v.34 bit mask to their maximum
+   values */
+void modemSetV8ModeMax(void)
+{
+     unsigned short mask;
+
+     /* Read and set the v.34 mask first */
+     mask = dspRead16x2(MAKE_DSP_ADDR(0x382), MAKE_DSP_ADDR(0x383));
+
+     /* Setting all the bits except the last two tells the remote modem (if
+        v.34 is used) that every speed that's possible under this protocol
+        is available */
+     mask |= 0x3FFF;
+
+     /* Write the mask back */
+     dspWrite16x2(MAKE_DSP_ADDR(0x382), MAKE_DSP_ADDR(0x383), mask);
+
+     /* Set the v.8 configuration register to configure the v.34 full duplex
+        mode for it's highest setting. The other configuration registers are
+        set to their maximums by default. */
+     dspWrite8(MAKE_DSP_ADDR(0x309), 0xCE);
+}
+
+/* Sets the v.8 configuration registers and v.34 bit mask to closely correspond
+   to the specified maximum data rate */
+void modemSetV8ModeDesired(const unsigned short bps)
+{
+     unsigned short mask;
+     int            i;
+
+     assert(bps >= 2400 && bps <= 33600);
+
+     /* Set the v.34 bit mask first */
+     mask = dspRead16x2(MAKE_DSP_ADDR(0x382), MAKE_DSP_ADDR(0x383));
+
+     /* Clear bits 0 - 13 */
+     mask &= ~0x3FFF;
+
+     /* Set bits, starting at bit 0, until the corresponding bit for the
+        specified data rate is set. Setting the bits in this way prevents
+        the remote modem from trying to renegotiate the connection speed,
+        which puts garbage into the receive buffers on both ends. */
+     i = 0;
+     while (i <= 13 && 2400 * (i + 1) <= bps)
+     {
+           mask |= 1 << i;
+           i++;
+     }
+
+     /* Write the mask back */
+     dspWrite16x2(MAKE_DSP_ADDR(0x382), MAKE_DSP_ADDR(0x383), mask);
+
+     /* Now set the v.8 configuration registers */
+     dspWrite8(MAKE_DSP_ADDR(0x309),
+               modemGetCCFromProtocolAndDataRate(MODEM_PROTOCOL_V34, bps));
+     dspWrite8(MAKE_DSP_ADDR(0x30B),
+               modemGetCCFromProtocolAndDataRate(MODEM_PROTOCOL_V32BIS, bps));
+     dspWrite8(MAKE_DSP_ADDR(0x30C),
+               modemGetCCFromProtocolAndDataRate(MODEM_PROTOCOL_V22BIS, bps));
+     dspWrite8(MAKE_DSP_ADDR(0x30D),
+               modemGetCCFromProtocolAndDataRate(MODEM_PROTOCOL_V17, bps));
 }
 
 /* Changes modes of operation for the modem */
 int modem_set_mode(int mode, modem_speed_t speed)
 {
-    if (mode != MODEM_MODE_REMOTE && mode != MODEM_MODE_DIRECT &&
-        mode != MODEM_MODE_ANSWER)
+    if (mode != MODEM_MODE_REMOTE && mode != MODEM_MODE_ANSWER)
        return 0;
 
     modem_reset();
 
-    /* Disable the tone detectors (TONEA, TONEB, and TONEC) by default */
-    modemClearBits(REGLOC(0x2), 0x80);
-
-    if (mode != MODEM_MODE_DIRECT)
-    {
-       /* The other two modes need to start off with RA (Relay A) not active.
-          Make sure it's disabled. */
-       if (modemRead(REGLOC(0x7)) & 0x2)
-          modemClearBits(REGLOC(0x7), 0x2);
-    }
-
-    modemClearBits(REGLOC(0x13), 0xC);
-    modemClearBits(REGLOC(0x8), 0x1); /* Disable RTS */
-
-    /* Disable the HDLC data transmission protocol */
-    modemClearBits(REGLOC(0x6), 0x10);
+    /* The REMOTE and ANSWER modes need to start off with RA (Relay A) not
+       active. Make sure it's disabled. */
+    if (modemRead(REGLOC(0x7)) & 0x2)
+       modemClearBits(REGLOC(0x7), 0x2);
 
     /* Enable the transmitter FIFO */
-    modemSetBits(REGLOC(0x4), 0x10);
+    modemSetBits(REGLOC(0x4), 0x10); /* Set FIFOEN */
 
     /* Set the character size to 8 bits */
-    modemSetBits(REGLOC(0x6), 0x3);
+    modemSetBits(REGLOC(0x6), 0x3); /* Set both WDSZ bits */
 
-    /* Disable parity */
-    modemClearBits(REGLOC(0x6), 0x8);
+    /* Disable parity and use one stop bit */
+    modemClearBits(REGLOC(0x6), 0xC); /* Clear PEN and STB */
 
-    /* Use one stop bit */
-    modemClearBits(REGLOC(0x6), 0x4);
+    /* TDBE, Transmit Data Buffer Empty, MUST be set before setting ASYN..
+       Hopefully this is not a problem since the modem was recently reset. */
+    assert(modemRead(REGLOC(0x1E)) & 0x8);
+
+    /* To enter ASYNC mode, TPDM must be set and RTS must be clear */
+
+    /* Turn Transmitter Parallel Data Mode on */
+    modemSetBits(REGLOC(0x8), 0x40); /* Set TPDM */
+
+    modemClearBits(REGLOC(0x8), 0x1); /* Clear RTS */
 
     /* Set the ASYN (ASYNC) bit */
     modemSetBits(REGLOC(0x8), 0x80);
 
-    /* Turn Transmitter Parallel Data Mode on */
-    modemSetBits(REGLOC(0x8), 0x40);
-
     switch (mode)
     {
            case MODEM_MODE_REMOTE:
-                /* Put the modem into dialing mode, don't open the line */
-                // This procedure is described on page 117 of the PDF.
+                /* This procedure is described on page 117 of the PDF. */
 
-                // Open the line.
-                modemSetBits(REGLOC(0x7), 0x2);
-                modemClearBits(REGLOC(0x8), 0x1);
+                /* Enable the tone detectors */
+                modemSetBits(REGLOC(0x2), 0x80); /* Set TDE */
+
+                /* Open the line */
+                modemSetBits(REGLOC(0x7), 0x2); /* Set RA */
 
                 /* Disable the DATA bit so that the hardware interrupts will
                    work as expected. It also doesn't hurt to clear the DTR
                    bit. */
-                modemClearBits(REGLOC(0x9), 0x5);
+                modemClearBits(REGLOC(0x9), 0x5); /* Clear DATA and DTR */
 
                 /* Set the dialing mode */
-                modemWrite(REGLOC(0x12), 0x81);
+                modemWrite(REGLOC(0x12), 0x81); /* Sets CONF */
 
                 /* Notify the modem that the configuration has changed */
-                modemSetBits(REGLOC(0x1F), 0x1);
+                modemSetBits(REGLOC(0x1F), 0x1); /* Set NEWC */
 
-                // Delay at least 4ms
+                /* Delay at least 4ms */
                 timer_spin_sleep(10);
 
-                /* Use DTMF tones, not pulses; also set into
-                   origination mode. */
-                modemSetBits(REGLOC(0x9), (1 << 5) | (1 << 4));
-                //modemSetBits(REGLOC(0x9), (1 << 5));
+                /* Dial using DTMF tones, and set the modem in origination
+                   mode */
+                modemSetBits(REGLOC(0x9), 0x30); /* Set DTMF and ORG */
 
                 /* Notify the modem that the configuration has changed */
-                modemSetBits(REGLOC(0x1F), 0x1);
-           break;
+                modemSetBits(REGLOC(0x1F), 0x1); /* Set NEWC */
 
-           case MODEM_MODE_DIRECT:
-                modemClearBits(REGLOC(0x9), 0x5);
-                modemWrite(REGLOC(0x12), 0x81);
-                modemSetBits(REGLOC(0x9), 0x10); /* Originate mode */
-                modemSetBits(REGLOC(0x1F), 0x1);
-                modemSetBits(REGLOC(0x7), 0x2); /* Start listening to the
-                                                   line */
+                /* The modem is originating. Set the origination flag to
+                   indicate this. */
+                modemCfg.flags |= MODEM_CFG_FLAG_ORIGINATE;
            break;
 
            case MODEM_MODE_ANSWER:
+                /* Clear ORG. This mode answers and does not originate */
+                modemClearBits(REGLOC(0x9), 0x10);
+
+                modemSetBits(REGLOC(0x1F), 0x1); /* Set NEWC */
+
+                /* Clear the DATA and DTR bits. The modem is waiting for a
+                   call, not answering one at this point. */
+                modemClearBits(REGLOC(0x9), 0x5);
+
+                /* Set the configuration for v.23 receive mode at 1200 bps.
+                   This will be used for caller ID later. The desired mode
+                   is set before a connection is attempted. */
+                modemWrite(REGLOC(0x12), 0xA4);
+
+                /* Set NEWC */
                 modemSetBits(REGLOC(0x1F), 0x1);
            break;
     }
 
-    modemCfg.state    = (unsigned char)mode;
-    modemCfg.protocol = MODEM_SPEED_GET_PROTOCOL(speed);
-    modemCfg.speed    = MODEM_SPEED_GET_SPEED(speed);
+    modemCreateCInfoFromPS(MODEM_SPEED_GET_PROTOCOL(speed),
+                           MODEM_SPEED_GET_SPEED(speed), &modemCfg.cInfo);
 
-    modemIntSetHandler(modemCfg.protocol, mode);
+    if (modemCfg.cInfo.protocol==MODEM_PROTOCOL_V8)
+    {
+       if (mode==MODEM_MODE_REMOTE)
+       {
+          /* Configure for origination mode */
+          dspWrite8(MAKE_DSP_ADDR(0x312), 0xA1); /* v.23 full duplex mode */
+          dspWrite8(MAKE_DSP_ADDR(0x313), 0xA1); /* v.23 half duplex mode */
+       } else
+       {
+          /* Configure for answer mode */
+          dspWrite8(MAKE_DSP_ADDR(0x312), 0xA4); /* v.23 full duplex mode */
+          dspWrite8(MAKE_DSP_ADDR(0x313), 0xA4); /* v.23 half duplex mode */
+       }
+
+       if (modemCfg.cInfo.speed==MODEM_SPEED_AUTO)
+       {
+          modemSetV8ModeMax(); /* Set the maximum values, the highest possible speed is used */
+
+          /* Set the automode flag to indicate that the MDP's automode feature
+             will be used when a connection is established */
+          modemCfg.flags |= MODEM_CFG_FLAG_AUTOMODE;
+       } else
+       {
+          /* Set the desired speed that the user specified */
+          modemSetV8ModeDesired(modemCfg.cInfo.bps);
+       }
+    }
+
+    modemIntSetHandler(modemCfg.cInfo.protocol, mode);
+
+    /* Setup interrupts that are protocol specific */
+    modemIntSetupProtocolInterrupts(0);
 
     return 1;
 }
 
-// Translate a DTMF symbol to an output word for the modem.
-static int dtmf_trans(int sym) {
-	static char trans[16] = {
-		'0', '1', '2', '3', '4', '5', '6', '7', '8', '9',
-		'*', '#', 'A', 'B', 'C', 'D'
-	};
-
-	int i;
-	for (i=0; i<16; i++)
-		if (trans[i] == sym)
-			return i;
-
-	return -1;
+/* A dial tone is detected if TONEA, TONEB, and TONEC are set */
+int modem_dialtone_detected(void)
+{
+	return (modemRead(REGLOC(0xB)) & 0xE0)==0xE0;
 }
 
-int modem_dialtone_detected() {
-	//if (modemRead(REGLOC(0xB)) & 0x08)
-	return (modemRead(REGLOC(0xB)) & 0xE0) == 0xE0;
-}
-
-int modem_wait_dialtone(int timeout) {
-	while (timeout > 0) {
+/* Waits for a dialtone. Timeout is specified as multiples of
+   100ms with the minimum value being 100. */
+int modem_wait_dialtone(int timeout)
+{
+	while (timeout > 0)
+	{
 		if (modem_dialtone_detected())
 			return 0;
+
 		thd_sleep(100);
 		timeout -= 100;
 	}
@@ -462,80 +724,47 @@ int modem_wait_dialtone(int timeout) {
 	return -1;
 }
 
-// Assumes that we're in REMOTE mode.
-int modem_dial(const char * digits) {
-	int i, tot, w;
-	uint8 sym;
-
-	// Start off by dialing the requested digits.
-	tot = strlen(digits);
-	for (i=0; i<tot; i++) {
-		// Get the DTMF symbol.
-		w = dtmf_trans(digits[i]);
-		if (w < 0) {
-			dbglog(DBG_ERROR, "modem_dial: unknown DTMF symbol '%c'\n", digits[i]);
-			continue;
-		}
-		sym = (uint8)w;
-	
-		// Write the DTMF symbol to TBUFFER.
-		modemWrite(REGLOC(0x10), sym);
-
-		// Wait for the modem to eat it.
-		while (!(modemRead(REGLOC(0x1E)) & 0x08))
-			thd_sleep(10);
-	}
-
-	/*// Now wait until ATV25 (answer tone detected) is set.
-	while (answer_timeout > 0) {
-		// Is ATV25 set?
-		if (modemRead(REGLOC(0xB) & 0x10))
-			break;
-
-		thd_sleep(10);
-		answer_timeout -= 10;
-	}
-
-	// Did we time out or succeed?
-	if (!(modemRead(REGLOC(0xB) & 0x10))) {
-		// Close the line
-		modemClearBits(REGLOC(0x7), 0x2);
-		return -1;
-	}
-
-	// Wait for one second after the tone is recognized (by standard).
-	thd_sleep(1000);
-
-	// Set the AUTO bit to begin auto-negotiation.
-	modemSetBits(REGLOC(0x15), 1); */
-
-	// This apparently required at the end of the sequence.
-	modemWrite(REGLOC(0x12), 0x81);
-	modemSetBits(REGLOC(0x9), 0x10); /* Originate mode */
-	modemSetBits(REGLOC(0x1F), 0x1);
-
-	modemCfg.state    = (unsigned char)MODEM_MODE_DIRECT;
-	modemIntSetHandler(modemCfg.protocol, MODEM_MODE_DIRECT);
-
-	// Success! We hope...
-	return 0;
+void modem_set_event_handler(MODEMEVENTHANDLERPROC eventHandler)
+{
+     modemCfg.eventHandler = eventHandler;
 }
 
-// Set the modem speaker on or off. This doesn't seem to work on my
-// test modem, but then even turning it on in PlanetWeb doesn't seem
-// to work for me...
-void modem_speaker(int enabled) {
-	modemClearBits(REGLOC(0x1), 0xC0);
-	if (enabled) {
-		modemSetBits(REGLOC(0x1), 0x40);
-	}
-	modemSetBits(REGLOC(0x1F), 0x1);
+/* For internal use only */
+void modemDropLine(void)
+{
+     /* Make sure the interrupt handler doesn't doing anything else */
+     modemIntResetControlCode();
+
+     /* Only do this if either DATA or DTR are currently set */
+     if (modemRead(REGLOC(0x9)) & 0x5)
+        modemClearBits(REGLOC(0x9), 0x5); /* Reset DTR and DATA */
+
+     /* Set NEWC if CONF contains a v.34 cleardown code */
+     if (modemRead(REGLOC(0x12))==0xC0)
+        modemSetBits(REGLOC(0x1F), 0x1);  /* Set NEWC */
+
+     /* Disable any connection specific interrupts */
+     modemIntSetupConnectionInterrupts(1);
+
+     /* Close the line if it's open */
+     if (modemRead(REGLOC(0x7)) & 0x2)
+        modemClearBits(REGLOC(0x7), 0x2);
+
+     /* The modem's not connected anymore */
+     modemCfg.flags &= ~(MODEM_CFG_FLAG_CONNECTING |
+                         MODEM_CFG_FLAG_CONNECTED);
+
+     /* Reset the origination bit so any attempts to dial will fail */
+     modemCfg.flags &= ~MODEM_CFG_FLAG_ORIGINATE;
 }
 
 void modem_disconnect(void)
 {
-     if (!modemCfg.actual.connected)
+     if (!(modemCfg.flags & MODEM_CFG_FLAG_CONNECTED))
         return;
+
+     /* The control code doesn't need to do anything else now */
+     modemIntResetControlCode();
 
      /* Any disconnection attempt will abort and forcefully terminate the
         connection if nothing happens after 5 seconds of starting to attempt
@@ -546,42 +775,28 @@ void modem_disconnect(void)
      modemIntSetupTimeoutTimer(1, NULL, modemTimeoutIncCallback);
      modemIntStartTimeoutTimer();
 
-     /* 0Bh:1 is DISDET
-        09h:2 is DATA
-        09h:0 is DTR */
-
-     switch (modemCfg.protocol)
+     switch (modemCfg.cInfo.protocol)
      {
             case MODEM_PROTOCOL_V32:
             case MODEM_PROTOCOL_V32BIS:
                  /* In v.32 mode, the remote modem will detect a cleardown
                     sequence and both modems will drop the carrier at the
                     end */
-                 modemWrite(REGLOC(0x12),
-                            modemCleardownCodes[MODEM_PROTOCOL_V32]);
+                 modemWrite(REGLOC(0x12), 0x70);
                  modemSetBits(REGLOC(0x15), 0x4); /* Set RREN */
 
                  /* Wait for a disconnection or a timeout */
                  while (__isLessThan(modemTimeout, 5) &&
                         (modemRead(REGLOC(0xF)) & 0x80));
-
-                 modemClearBits(REGLOC(0x9), 0x5); /* Reset DTR and DATA */
-                 modemSetBits(REGLOC(0x1F), 0x1);  /* Set NEWC */
             break;
 
             case MODEM_PROTOCOL_V34:
-                 /* In v.34 mode, the MDP sets ABCODE to 0x96 when it detects
-                    a cleardown sequence */
-                 modemWrite(REGLOC(0x12),
-                            modemCleardownCodes[MODEM_PROTOCOL_V34]);
+                 modemWrite(REGLOC(0x12), 0xC0);
                  modemSetBits(REGLOC(0x15), 0x4); /* Set RREN */
 
                  while (__isLessThan(modemTimeout, 5) &&
                         (modemRead(REGLOC(0xF)) & 0x80) &&
                         modemRead(REGLOC(0x14)) != 0x96);
-
-                 modemClearBits(REGLOC(0x9), 0x5); /* Reset DTR and DATA */
-                 modemSetBits(REGLOC(0x1F), 0x1);  /* Set NEWC */
             break;
 
             default:
@@ -594,17 +809,7 @@ void modem_disconnect(void)
      modemIntResetTimeoutTimer();
      modemIntShutdownTimeoutTimer();
 
-     /* Close the line */
-     modemClearBits(REGLOC(0x7), 0x2);
-
-     /* Set the default interrupt handler */
-     modemIntClearHandler();
-
-     /* The modem's not connected anymore */
-     modemCfg.actual.connecting = modemCfg.actual.connected = 0;
-
-     /* Not doing anything either */
-     modemCfg.state = MODEM_STATE_NULL;
+     modemDropLine();
 }
 
 /* For internal use only */
@@ -612,39 +817,47 @@ void modemEstablishConnection(void)
 {
      unsigned char mSpeedConfig = 0;
 
-     if (modemCfg.protocol != MODEM_PROTOCOL_V34)
+     if (modemCfg.cInfo.protocol != MODEM_PROTOCOL_V8)
      {
-        mSpeedConfig = modemSpeedConfig[modemCfg.protocol][modemCfg.speed];
+        mSpeedConfig = modemSpeedConfig[modemCfg.cInfo.protocol][modemCfg.cInfo.speed];
         assert(mSpeedConfig != 0);
      } else
-        mSpeedConfig = 0xAA; /* Establish a connection using a v.8
-                                handshake */
+       mSpeedConfig = 0xAA; /* Establish a connection using a v.8
+                               handshake */
 
      /* Set the connection mode first */
-     modemWrite(REGLOC(0x12), mSpeedConfig);
+     modemWrite(REGLOC(0x12), mSpeedConfig); /* Sets CONF */
 
-     /* Set the new configuration */
-     modemSetBits(REGLOC(0x1F), 0x1);
+     /* Notify the MDP of the configuration change */
+     modemSetBits(REGLOC(0x1F), 0x1); /* Set NEWC */
 
-     /* Please leave the transmitter FIFO extension disabled. It really
-        messes up interrupts if they're enabled. */
-     dspClearBits8(MAKE_DSP_ADDR(0x702), 0x1);
+     /* If the modem is not originating then open the line so the incoming call
+        can be answered */
+     if (!(modemCfg.flags & MODEM_CFG_FLAG_ORIGINATE))
+     {
+        modemSetBits(REGLOC(0x7), 0x2); /* Set RA */
+        timer_spin_sleep(10);
+     }
 
      /* Note that in all modes of operation RTS will be turned on as soon
         as DTR is set. This is allowed according to the hardware documents,
         and it makes life easier. */
 
-     /* Set the DTR bit to establish a connection */
-     if (modemCfg.protocol != MODEM_PROTOCOL_V32 &&
-         modemCfg.protocol != MODEM_PROTOCOL_V32BIS)
+     modemSetBits(REGLOC(0x9), 0x1); /* Set DTR */
+
+     if (modemCfg.flags & MODEM_CFG_FLAG_AUTOMODE)
      {
-        modemSetBits(REGLOC(0x9), 0x1 | 0x4); /* Set DTR and DATA */
-        modemSetBits(REGLOC(0x8), 0x1);       /* Set RTS */
+        /* Have the MDP use v.8 automode */
+        modemSetBits(REGLOC(0x15), 0x8); /* Set AUTO */
      } else
      {
-        /* V.32/V.32 bis protocol has special requirements */
-        modemSetBits(REGLOC(0x9), 0x1); /* Set DTR but not DATA */
-        /* Wait until DATA is set before setting RTS just to be safe */
+        if (modemCfg.cInfo.protocol != MODEM_PROTOCOL_V32 &&
+            modemCfg.cInfo.protocol != MODEM_PROTOCOL_V32BIS)
+        {
+           /* Set DATA and RTS */
+           modemSetBits(REGLOC(0x9), 0x4);
+           modemSetBits(REGLOC(0x8), 0x1);
+        }
      }
 }
 
@@ -676,6 +889,7 @@ int dspWrite8(unsigned char meaddl, unsigned char meaddh,
     /* Set MEMACC. This tells the DSP that the data is ready to be written */
     modemSetBits(REGLOC(0x1D), 0x80);
 
+    /* MEACC is cleared and NEWS is set when the write completes */
     /* Put some sort of timeout here instead */
     while (modemRead(REGLOC(0x1D)) & 0x80);
 
@@ -857,12 +1071,12 @@ unsigned short dspRead16x2(unsigned char meaddl1, unsigned char meaddh1,
 /* Status functions */
 int modem_is_connecting(void)
 {
-    return modemCfg.actual.connecting;
+    return (modemCfg.flags & MODEM_CFG_FLAG_CONNECTING) ? 1 : 0;
 }
 
 int modem_is_connected(void)
 {
-    return modemCfg.actual.connected;
+    return (modemCfg.flags & MODEM_CFG_FLAG_CONNECTED) ? 1 : 0;
 }
 
 unsigned long modem_get_connection_rate(void)
