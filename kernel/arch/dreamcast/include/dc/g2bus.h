@@ -38,6 +38,12 @@ void g2_read_block_8(uint8 * output, uint32 address, int amt);
 /* Write a block 8-bit values to G2 */
 void g2_write_block_8(const uint8 * input, uint32 address, int amt);
 
+/* Read a block of 16-bit values from G2 */
+void g2_read_block_16(uint16 * output, uint32 address, int amt);
+
+/* Write a block of 16-bit values to G2 */
+void g2_write_block_16(const uint16 * input, uint32 address, int amt);
+
 /* Read a block of 32-bit values from G2 */
 void g2_read_block_32(uint32 * output, uint32 address, int amt);
 

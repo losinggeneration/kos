@@ -3,7 +3,7 @@
    include/kos/net.h
    (c)2002 Dan Potter
 
-   $Id: net.h,v 1.7 2003/02/25 07:43:12 bardtx Exp $
+   $Id: net.h,v 1.8 2003/06/19 04:30:23 bardtx Exp $
 
 */
 
@@ -182,6 +182,9 @@ net_input_func net_input_set_target(net_input_func t);
 
 /* Interface list; note: do not manipulate directly */
 extern struct netif_list net_if_list;
+
+/* Function to retrieve the list. Again, do not manipulate directly. */
+struct netif_list * net_get_if_list();
 
 /* Register a network device */
 int net_reg_device(netif_t *device);

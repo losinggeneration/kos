@@ -6,7 +6,7 @@
 # $Id: Makefile,v 1.5 2002/02/27 05:43:11 bardtx Exp $
 
 OBJS =
-SUBDIRS = arch fs mm thread net
+SUBDIRS = arch fs thread net exports
 
 all: subdirs
 	rm -f $(KOS_BASE)/lib/libkallisti.a

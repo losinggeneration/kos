@@ -12,6 +12,7 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <assert.h>
 #include "msegbuf.h"
 
 CVSID("$Id: msegbuf.c,v 1.1 2003/05/23 02:04:42 bardtx Exp $");

@@ -82,6 +82,10 @@ int net_unreg_device(netif_t *device) {
 	return 0;
 }
 
+struct netif_list * net_get_if_list() {
+	return &net_if_list;
+}
+
 /*****************************************************************************/
 /* Init/shutdown */
 

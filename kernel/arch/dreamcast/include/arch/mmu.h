@@ -56,6 +56,7 @@ __BEGIN_DECLS
 
 /* MMU TLB entry for a single page (one 32-bit word) */
 typedef struct mmupage {
+	/* Explicit pieces, used for reference */
 	/*uint32	virtual; */	/* implicit */
 	uint32		physical:18;	/* Physical page ID	-- 18 bits */
 	uint32		prkey:2;	/* Protection key data	-- 2 bits  */
@@ -65,6 +66,10 @@ typedef struct mmupage {
 	uint32		dirty:1;	/* Dirty		-- 1 bit   */
 	uint32		wthru:1;	/* Write-thru enable	-- 1 bit   */
 	uint32		blank:7;	/* Reserved		-- 7 bits */
+
+	/* Pre-compiled pieces. These waste a bit of ram, but they also
+	   speed loading immensely at runtime. */
+	uint32          pteh, ptel;
 } mmupage_t;
 
 /* MMU sub-context type. We have two-level page tables on

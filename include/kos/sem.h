@@ -1,9 +1,9 @@
 /* KallistiOS ##version##
 
    include/kos/sem.h
-   (c)2001 Dan Potter
+   Copyright (C)2001,2003 Dan Potter
 
-   $Id: sem.h,v 1.5 2003/02/14 08:08:55 bardtx Exp $
+   $Id: sem.h,v 1.7 2003/07/31 00:38:00 bardtx Exp $
 
 */
 
@@ -24,29 +24,33 @@ typedef struct semaphore {
 	LIST_ENTRY(semaphore)	g_list;
 
 	/* Basic semaphore info */
-	tid_t		owner;		/* Process that owns this semaphore */
 	int		count;		/* The semaphore count */
 } semaphore_t;
 
 LIST_HEAD(semlist, semaphore);
 
-/* Allocate a new semaphore; the semaphore will be assigned
-   to the calling process and when that process dies, the semaphore
-   will also die (in theory...). */
+/* Allocate a new semaphore. Sets errno to ENOMEM on failure. */
 semaphore_t *sem_create(int value);
 
 /* Free a semaphore */
 void sem_destroy(semaphore_t *sem);
 
-/* Wait on a semaphore */
-void sem_wait(semaphore_t *sem);
+/* Wait on a semaphore. Returns -1 on error:
+     EPERM - called inside interrupt
+     EINTR - wait was interrupted */
+int sem_wait(semaphore_t *sem);
 
 /* Wait on a semaphore, with timeout (in milliseconds); returns -1
-   on failure, otherwise 0. */
+   on failure, otherwise 0.
+     EPERM  - called inside interrupt
+     EINTR  - wait was interrupted
+     EAGAIN - timed out */
 int sem_wait_timed(semaphore_t *sem, int timeout);
 
 /* Attempt to wait on a semaphore. If the semaphore would block,
-   then return an error instead of actually blocking. */
+   then return an error instead of actually blocking. Note that this
+   function, unlike the other waits, DOES work inside an interrupt.
+     EAGAIN - would block */
 int sem_trywait(semaphore_t *sem);
 
 /* Signal a semaphore */
@@ -54,9 +58,6 @@ void sem_signal(semaphore_t *sem);
 
 /* Return the semaphore count */
 int sem_count(semaphore_t *sem);
-
-/* Free all semaphores for the given process' pid */
-void sem_freeall(int tid);
 
 /* Called by the periodic thread interrupt to look for timed out
    sem_wait_timed calls */

@@ -1,13 +1,14 @@
 /* KallistiOS ##version##
 
    fs_utils.c
-   (c)2002 Dan Potter
+   Copyright (C)2002 Dan Potter
 
 */
 
 /*
 
 A couple of helpful utility functions for VFS usage.
+XXX This probably belongs in something like libc...
 
 */
 

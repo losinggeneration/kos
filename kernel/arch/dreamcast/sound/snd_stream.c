@@ -9,6 +9,8 @@
 
 #include <string.h>
 #include <stdlib.h>
+#include <stdio.h>
+#include <sys/queue.h>
 
 #include <arch/timer.h>
 #include <dc/g2bus.h>

@@ -1792,8 +1792,8 @@ void public_fREe(Void_t* m) {
   }
 }
 
-#ifdef KM_DBG
 int mem_check_block(Void_t* m) {
+#ifdef KM_DBG
 	uint32 rv = arch_get_ret_addr(), rs, *nt, i;
 	memctl_t * ctl;
 	int dmg = 0;
@@ -1836,18 +1836,20 @@ int mem_check_block(Void_t* m) {
 	}
 
 	return retv;
-}
+#else
+	return 0;
 #endif
+}
 
-#ifdef KM_DBG
 int mem_check_all() {
+#ifdef KM_DBG
 	int retv = 0, rvp;
 	uint32 rv = arch_get_ret_addr();
 	memctl_t * ctl;
 
-  if (MALLOC_PREACTION != 0) {
-    return;
-  }
+	if (MALLOC_PREACTION != 0) {
+		return;
+	}
   
 #ifdef KM_DBG_VERBOSE
 	printf("Thread %d/%08lx checking all memory blocks\n",
@@ -1860,12 +1862,14 @@ int mem_check_all() {
 			retv = rvp;
 	}
 
-  if (MALLOC_POSTACTION != 0) {
-  }
+	if (MALLOC_POSTACTION != 0) {
+	}
 
 	return retv;
-}
+#else
+	return 0;
 #endif
+}
 
 Void_t* public_rEALLOc(Void_t* m, size_t bytes) {
 #ifdef KM_DBG

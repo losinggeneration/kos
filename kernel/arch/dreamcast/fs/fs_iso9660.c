@@ -35,12 +35,13 @@ ISO9660 systems, as these were used as references as well.
 #include <kos/mutex.h>
 #include <kos/fs.h>
 
+#include <stdlib.h>
 #include <stdio.h>
 #include <ctype.h>
 #include <string.h>
 #include <malloc.h>
 
-CVSID("$Id: fs_iso9660.c,v 1.10 2003/04/24 03:27:01 bardtx Exp $");
+CVSID("$Id: fs_iso9660.c,v 1.2 2003/07/15 07:55:01 bardtx Exp $");
 
 static int init_percd();
 static int percd_done;
@@ -547,7 +548,7 @@ static void iso_break_all() {
 }
 
 /* Open a file or directory */
-static file_t iso_open(vfs_handler_t * vfs, const char *fn, int mode) {
+static void * iso_open(vfs_handler_t * vfs, const char *fn, int mode) {
 	file_t		fd;
 	iso_dirent_t	*de;
 
@@ -582,11 +583,13 @@ static file_t iso_open(vfs_handler_t * vfs, const char *fn, int mode) {
 	fh[fd].size = iso_733(de->size);
 	fh[fd].broken = 0;
 	
-	return fd;
+	return (void *)fd;
 }
 
 /* Close a file or directory */
-static void iso_close(file_t fd) {
+static void iso_close(void * h) {
+	file_t fd = (file_t)h;
+
 	/* Check that the fd is valid */
 	if (fd < MAX_ISO_FILES) {
 		/* No need to lock the mutex: this is an atomic op */
@@ -595,9 +598,10 @@ static void iso_close(file_t fd) {
 }
 
 /* Read from a file */
-static ssize_t iso_read(file_t fd, void *buf, size_t bytes) {
+static ssize_t iso_read(void * h, void *buf, size_t bytes) {
 	int rv, toread, thissect, c;
 	uint8 * outbuf;
+	file_t fd = (file_t)h;
 
 	/* Check that the fd is valid */
 	if (fd >= MAX_ISO_FILES || fh[fd].first_extent == 0 || fh[fd].broken)
@@ -660,7 +664,9 @@ static ssize_t iso_read(file_t fd, void *buf, size_t bytes) {
 }
 
 /* Seek elsewhere in a file */
-static off_t iso_seek(file_t fd, off_t offset, int whence) {
+static off_t iso_seek(void * h, off_t offset, int whence) {
+	file_t fd = (file_t)h;
+
 	/* Check that the fd is valid */
 	if (fd>=MAX_ISO_FILES || fh[fd].first_extent==0 || fh[fd].broken)
 		return -1;
@@ -688,7 +694,9 @@ static off_t iso_seek(file_t fd, off_t offset, int whence) {
 }
 
 /* Tell where in the file we are */
-static off_t iso_tell(file_t fd) {
+static off_t iso_tell(void * h) {
+	file_t fd = (file_t)h;
+
 	if (fd>=MAX_ISO_FILES || fh[fd].first_extent==0 || fh[fd].broken)
 		return -1;
 
@@ -696,7 +704,9 @@ static off_t iso_tell(file_t fd) {
 }
 
 /* Tell how big the file is */
-static size_t iso_total(file_t fd) {
+static size_t iso_total(void * h) {
+	file_t fd = (file_t)h;
+
 	if (fd>=MAX_ISO_FILES || fh[fd].first_extent==0 || fh[fd].broken)
 		return -1;
 
@@ -721,13 +731,15 @@ static void fn_postprocess(char *fnin) {
 }
 
 /* Read a directory entry */
-static dirent_t *iso_readdir(file_t fd) {
+static dirent_t *iso_readdir(void * h) {
 	int		c;
 	iso_dirent_t	*de;
 
 	/* RockRidge */
 	int		len;
 	uint8		*pnt;
+
+	file_t fd = (file_t)h;
 
 	if (fd>=MAX_ISO_FILES || fh[fd].first_extent==0 || !fh[fd].dir || fh[fd].broken)
 		return NULL;
@@ -821,7 +833,7 @@ static void iso_vblank(uint32 evt) {
 
 /* There's only one ioctl at the moment (re-initialize caches) but you should
    always clear data and size. */
-static int iso_ioctl(file_t hnd, void *data, size_t size) {
+static int iso_ioctl(void * hnd, void *data, size_t size) {
 	iso_reset();
 
 	return 0;
@@ -829,10 +841,17 @@ static int iso_ioctl(file_t hnd, void *data, size_t size) {
 
 /* Put everything together */
 static vfs_handler_t vh = {
-	{ "/cd" },	/* path prefix */
-	0, 0,		/* In-kernel, no cacheing */
-	NULL,		/* privdata */
-	VFS_LIST_INIT,	/* linked list pointer */
+	/* Name handler */
+	{
+		"/cd",		/* name */
+		0,		/* tbfi */
+		0x00010000,	/* Version 1.0 */
+		0,		/* flags */
+		NMMGR_TYPE_VFS,	/* VFS handler */
+		NMMGR_LIST_INIT
+	},
+
+	0, NULL,	/* no cacheing, privdata */
 	
 	iso_open,
 	iso_close,
@@ -877,7 +896,7 @@ int fs_iso9660_init() {
 	iso_vblank_hnd = vblank_handler_add(iso_vblank);
 
 	/* Register with VFS */
-	return fs_handler_add("/cd", &vh);
+	return nmmgr_handler_add(&vh.nmmgr);
 }
 
 /* De-init the file system */
@@ -900,11 +919,5 @@ int fs_iso9660_shutdown() {
 		mutex_destroy(fh_mutex);
 	cache_mutex = fh_mutex = NULL;
 	
-	return fs_handler_remove(&vh);
+	return nmmgr_handler_remove(&vh.nmmgr);
 }
-
-
-
-
-
-

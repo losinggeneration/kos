@@ -9,6 +9,9 @@
 
 #include <string.h>
 #include <malloc.h>
+#include <stdio.h>
+#include <assert.h>
+#include <errno.h>
 
 #include <kos/thread.h>
 #include <kos/limits.h>
@@ -32,13 +35,15 @@ condvar_t *cond_create() {
 
 	/* Create a condvar structure */
 	cv = (condvar_t*)malloc(sizeof(condvar_t));
+	if (!cv) {
+		errno = ENOMEM;
+		return NULL;
+	}
 
 	/* Add to the global list */
-	if (!irq_inside_int())
-		old = irq_disable();
+	old = irq_disable();
 	LIST_INSERT_HEAD(&cond_list, cv, g_list);
-	if (!irq_inside_int())
-		irq_restore(old);
+	irq_restore(old);
 
 	return cv;
 }
@@ -51,11 +56,9 @@ void cond_destroy(condvar_t *cv) {
 	genwait_wake_all(cv);
 
 	/* Remove it from the global list */
-	if (!irq_inside_int())
-		old = irq_disable();
+	old = irq_disable();
 	LIST_REMOVE(cv, g_list);
-	if (!irq_inside_int())
-		irq_restore(old);
+	irq_restore(old);
 
 	/* Free the memory */
 	free(cv);
@@ -66,6 +69,7 @@ int cond_wait_timed(condvar_t *cv, mutex_t *m, int timeout) {
 
 	if (irq_inside_int()) {
 		dbglog(DBG_WARNING, "cond_wait: called inside interrupt\n");
+		errno = EPERM;
 		return -1;
 	}
 
@@ -79,7 +83,9 @@ int cond_wait_timed(condvar_t *cv, mutex_t *m, int timeout) {
 	rv = genwait_wait(cv, timeout ? "cond_wait_timed" : "cond_wait", timeout, NULL);
 
 	/* Re-lock our mutex */
-	mutex_lock(m);
+	if (rv >= 0 || errno == EAGAIN) {
+		mutex_lock(m);
+	}
 
 	/* Ok, ready to return */
 	irq_restore(old);
@@ -87,34 +93,30 @@ int cond_wait_timed(condvar_t *cv, mutex_t *m, int timeout) {
 	return rv;
 }
 
-void cond_wait(condvar_t *cv, mutex_t *m) {
-	cond_wait_timed(cv, m, 0);
+int cond_wait(condvar_t *cv, mutex_t *m) {
+	return cond_wait_timed(cv, m, 0);
 }
 
 void cond_signal(condvar_t *cv) {
 	int old = 0;
 
-	if (!irq_inside_int())
-		old = irq_disable();
+	old = irq_disable();
 
 	/* Wake any one thread who's waiting */
 	genwait_wake_one(cv);
 
-	if (!irq_inside_int())
-		irq_restore(old);
+	irq_restore(old);
 }
 
 void cond_broadcast(condvar_t *cv) {
 	int old = 0;
 
-	if (!irq_inside_int())
-		old = irq_disable();
+	old = irq_disable();
 
 	/* Wake all threads who are waiting */
 	genwait_wake_all(cv);
 
-	if (!irq_inside_int())
-		irq_restore(old);
+	irq_restore(old);
 }
 
 /* Initialize condvar structures */

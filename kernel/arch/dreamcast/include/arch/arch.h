@@ -40,6 +40,10 @@ __BEGIN_DECLS
 #define DEFAULT_SERIAL_BAUD	57600
 #define DEFAULT_SERIAL_FIFO	1
 
+/* Do we need symbol prefixes? */
+#define ELF_SYM_PREFIX "_"
+#define ELF_SYM_PREFIX_LEN 1
+
 /* Panic function */
 void panic(const char *str) __noreturn;
 
@@ -148,6 +152,10 @@ void syscall_init();
 
 /* Pass in a frame pointer value to get the previous frame pointer for the given frame */
 #define arch_fptr_next(fptr) (*((uint32*)(fptr+4)))
+
+/* Returns true if the passed address is likely to be valid. Doesn't
+   have to be exact, just a sort of general idea. */
+#define arch_valid_address(ptr) ((ptr_t)(ptr) >= 0x8c010000 && (ptr_t)(ptr) < 0x8d000000)
 
 __END_DECLS
 

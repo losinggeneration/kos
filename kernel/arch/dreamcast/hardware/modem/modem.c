@@ -9,6 +9,7 @@
 #include <kos.h>
 #include <dc/g2bus.h>
 #include <stdlib.h>
+#include <assert.h>
 #include <dc/modem/modem.h>
 #include "mintern.h"
 

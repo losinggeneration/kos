@@ -10,6 +10,9 @@
 
 #include <string.h>
 #include <malloc.h>
+#include <stdio.h>
+#include <assert.h>
+#include <errno.h>
 
 #include <kos/thread.h>
 #include <kos/limits.h>
@@ -36,16 +39,16 @@ semaphore_t *sem_create(int value) {
 
 	/* Create a semaphore structure */
 	sm = (semaphore_t*)malloc(sizeof(semaphore_t));
-	sm->owner = thd_current->tid;
+	if (!sm) {
+		errno = ENOMEM;
+		return NULL;
+	}
 	sm->count = value;
 
 	/* Add to the global list */
 	spinlock_lock(&mutex);
 	LIST_INSERT_HEAD(&sem_list, sm, g_list);
 	spinlock_unlock(&mutex);
-
-	/* Add to the process' list of semaphores */
-	/* XXX Do later */
 
 	return sm;
 }
@@ -63,12 +66,13 @@ void sem_destroy(semaphore_t *sm) {
 	free(sm);
 }
 
-void sem_wait(semaphore_t *sm) {
-	int old;
+int sem_wait(semaphore_t *sm) {
+	int old, rv = 0;
 	
 	if (irq_inside_int()) {
 		dbglog(DBG_WARNING, "sem_wait: called inside interrupt\n");
-		return;
+		errno = EPERM;
+		return -1;
 	}
 
 	old = irq_disable();
@@ -79,10 +83,18 @@ void sem_wait(semaphore_t *sm) {
 	} else {
 		/* Block us until we're signaled */
 		sm->count--;
-		genwait_wait(sm, "sem_wait", 0, NULL);
+		rv = genwait_wait(sm, "sem_wait", 0, NULL);
+
+		/* Did we get interrupted? */
+		if (rv < 0) {
+			assert( errno == EINTR );
+			rv = -1;
+		}
 	}
 
 	irq_restore(old);
+
+	return rv;
 }
 
 /* This function will be called by genwait if we timeout. */
@@ -101,13 +113,13 @@ int sem_wait_timed(semaphore_t *sem, int timeout) {
 	/* Make sure we're not inside an interrupt */
 	if (irq_inside_int()) {
 		dbglog(DBG_WARNING, "sem_wait_timed: called inside interrupt\n");
+		errno = EPERM;
 		return -1;
 	}
 
 	/* Check for smarty clients */
 	if (timeout <= 0) {
-		sem_wait(sem);
-		return 0;
+		return sem_wait(sem);
 	}
 
 	/* Disable interrupts */
@@ -132,12 +144,7 @@ int sem_wait_timed(semaphore_t *sem, int timeout) {
    then return an error instead of actually blocking. */
 int sem_trywait(semaphore_t *sm) {
 	int old = 0;
-	int succeeded = -1;
-
-	if (irq_inside_int()) {
-		dbglog(DBG_WARNING, "sem_trywait: called inside interrupt\n");
-		return -1;
-	}
+	int succeeded;
 
 	old = irq_disable();
 
@@ -145,6 +152,9 @@ int sem_trywait(semaphore_t *sm) {
 	if (sm->count > 0) {
 		sm->count--;
 		succeeded = 0;
+	} else {
+		succeeded = -1;
+		errno = EAGAIN;
 	}
 
 	/* Restore interrupts */
@@ -157,8 +167,7 @@ int sem_trywait(semaphore_t *sm) {
 void sem_signal(semaphore_t *sm) {
 	int		old = 0, woken;
 	
-	if (!irq_inside_int())
-		old = irq_disable();
+	old = irq_disable();
 
 	/* Is there anyone waiting? If so, pass off to them */
 	if (sm->count < 0) {
@@ -170,8 +179,7 @@ void sem_signal(semaphore_t *sm) {
 		sm->count++;
 	}
 
-	if (!irq_inside_int())
-		irq_restore(old);
+	irq_restore(old);
 }
 
 /* Return the semaphore count */

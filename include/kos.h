@@ -36,7 +36,6 @@ __BEGIN_DECLS
 #include <arch/dbgio.h>
 #include <arch/irq.h>
 #include <arch/spinlock.h>
-#include <arch/syscall.h>
 #include <arch/timer.h>
 #include <arch/types.h>
 #include <arch/exec.h>

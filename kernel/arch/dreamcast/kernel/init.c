@@ -1,16 +1,14 @@
 /* KallistiOS ##version##
 
-   main.c
-   (c)2000 Dan Potter
+   init.c
+   Copyright (C)2003 Dan Potter
 */
 
 #include <stdio.h>
 #include <malloc.h>
-#include <arch/syscall.h>
 #include <arch/dbgio.h>
 #include <arch/timer.h>
 #include <arch/arch.h>
-#include <arch/atexit.h>
 #include <arch/irq.h>
 #include <arch/rtc.h>
 #include <dc/ubc.h>
@@ -38,19 +36,24 @@ extern const char banner[];
 int arch_auto_init() {
 	dbgio_printk_func old;
 
+	/* Initialize memory management */
+	mm_init();
+
 	if (!(__kos_init_flags & INIT_NO_DCLOAD))
 		fs_dcload_init_console();	/* Init dc-load console, if applicable */
 	dbgio_init();			/* Init debug IO and print a banner */
 	if (__kos_init_flags & INIT_QUIET)
 		dbgio_set_printk(dbgio_null_write);
-	dbglog(DBG_INFO, "\n--\n");
-	dbglog(DBG_INFO, banner);
+	else {
+		// PTYs not initialized yet
+		dbgio_printk("\n--\n");
+		dbgio_printk(banner);
+	}
 	
 	irq_init();			/* IRQs */
 	irq_disable();			/* Turn on exceptions */
 	timer_init();			/* Timers */
 	hardware_sys_init();		/* DC low-level hardware init */
-	syscall_init();			/* System call interface */
 
 	/* Initialize our timer */
 	timer_ms_enable();
@@ -62,7 +65,10 @@ int arch_auto_init() {
 	else
 		thd_init(THD_MODE_COOP);
 
+	nmmgr_init();
+
 	fs_init();			/* VFS */
+	fs_pty_init();			/* Pty */
 	fs_ramdisk_init();		/* Ramdisk */
 	fs_romdisk_init();		/* Romdisk */
 
@@ -92,13 +98,13 @@ int arch_auto_init() {
 	if (__kos_init_flags & INIT_NET) {
 		net_init();		/* Enable networking (and drivers) */
 	}
-	if (!(__kos_init_flags & INIT_NO_DCLOAD) && *DCLOADMAGICADDR == DCLOADMAGICVALUE &&
+	/* if (!(__kos_init_flags & INIT_NO_DCLOAD) && *DCLOADMAGICADDR == DCLOADMAGICVALUE &&
 		(__kos_init_flags & INIT_NET))
 	{
 		// dbgio_set_printk(old);
 		fs_dclnative_init();
 		dbglog(DBG_INFO, "dc-load-ip native support enabled\n");
-	}
+	} */
 
 
 	return 0;
@@ -117,6 +123,7 @@ void arch_auto_shutdown() {
 	fs_iso9660_shutdown();
 	fs_ramdisk_shutdown();
 	fs_romdisk_shutdown();
+	fs_pty_shutdown();
 	fs_shutdown();
 	thd_shutdown();
 	rtc_shutdown();
@@ -137,9 +144,6 @@ int arch_main() {
 
 	/* Clear out the BSS area */
 	memset(bss_start, 0, bss_end - bss_start);
-
-	/* Initialize memory management */
-	mm_init();
 
 	/* Do auto-init stuff */
 	arch_auto_init();
@@ -166,7 +170,7 @@ void arch_set_exit_path(int path) {
 /* Does the actual shutdown stuff for a proper shutdown */
 void arch_shutdown() {
 	/* Run dtors */
-	arch_atexit();
+	_atexit_call_all();
 	arch_dtors();
 
 	dbglog(DBG_CRITICAL, "arch: shutting down kernel\n");

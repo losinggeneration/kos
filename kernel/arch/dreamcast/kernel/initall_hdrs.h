@@ -2,6 +2,7 @@
 #include <assert.h>
 #include <kos/fs.h>
 #include <kos/thread.h>
+#include <kos/fs_pty.h>
 #include <kos/fs_romdisk.h>
 #include <kos/fs_ramdisk.h>
 #include <kos/net.h>

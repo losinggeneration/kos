@@ -225,6 +225,94 @@ hdl_except:
 	.long	_irq_handle_exception
 
 
+! Special case handler for TLB miss exceptions. There are two reasons
+! why we'd want to do this and complicate things. The first is speed --
+! if TLB misses happen often (which is likely if we're using the MMU
+! allocator) then saving the full processor context and switching
+! back is going to be a major drain on the dcache and also just
+! general processor time. Second reason is that it allows us to process
+! these inside an IRQ/exception handler without having to have nestable
+! exceptions just yet. That's a whole 'nother egg I don't want to
+! break just yet.
+!
+! !!NOTE!! This is highly dependent on the structure of the MMU tables
+! in mmu.h and the MMU code in mmu.c. If either of those change, this will
+! likely need to change as well.
+	.text
+	.align 2
+tlb_miss_hnd:
+	! Get the exception event code; we want to handle only
+	! 0x0040 (ITLB_MISS/DTLB_MISS_READ) or 0x0060 (DTLB_MISS_WRITE)
+	mov	#-1,r3		! 0xff000024 (EXPEVT) -> r3
+	shll16	r3
+	shll8	r3
+	add	#0x24,r3
+	mov.l	@r3,r0		! Get EXPEVT
+
+	mov	#0x40,r1	! 0x0040 -> r1
+
+	cmp/eq	r0,r1
+	bt.s	tmh_doit
+	mov	#0x60,r1
+
+	cmp/eq	r0,r1
+	bt	tmh_doit
+
+	! It's not one of the MISS codes, just send it on to the normal
+	! irq processing.
+	bra	_irq_save_regs
+	mov	#2,r4
+
+tmh_doit:
+	! So it's an ITLB or DTLB_MISS code. Look at the MMU module's
+	! shortcut flag. If that's set, it's safe to pass on processing
+	! directly to the mapping function.
+
+	! Check the shortcut flag
+	mov.l	tmh_shortcut_addr,r0
+	mov.l	@r0,r0
+	cmp/pz	r0
+	bf/s	_irq_save_regs
+	mov	#2,r4
+
+	! Coast is clear -- setup the args and call the C function. Regs R0-R7
+	! are volatile on SH-4 anyway, and R8-R14 will be saved if needed
+	! onto our temp stack. So all we need to worry about here, at least
+	! for this small C call, is the stack. To faciliate the stack, we'll
+	! save R15 and setup a small temp stack.
+	mov.l	tmh_stack_save_addr,r0		! Setup stack
+	mov.l	r15,@r0
+	mov.l	tmh_temp_stack_addr,r15
+
+	mov	#0,r4				! Call gen_miss
+	mov	#0,r5
+	mov.l	tmh_gen_miss_addr,r0
+	jsr	@r0
+	mov	#0,r6
+
+	mov.l	tmh_stack_save,r15		! Fix stack back
+
+	! Return back from the exception
+	rte
+	nop
+
+	.align	2
+tmh_shortcut_addr:
+	.long	_mmu_shortcut_ok
+tmh_stack_save_addr:
+	.long	tmh_stack_save
+tmh_stack_save:
+	.long	0
+tmh_temp_stack_addr:
+	.long	tmh_temp_stack
+tmh_gen_miss_addr:
+	.long	_mmu_gen_tlb_miss
+
+	.data
+	.space	256
+tmh_temp_stack:
+
+
 ! The SH4 has very odd exception handling. Instead of having a vector
 ! table like a sensible processor, it has a vector code block. *sigh*
 ! Thus this table of assembly code. Note that we can't catch reset
@@ -248,6 +336,8 @@ _vma_table_100:		! General exceptions
 
 _vma_table_400:		! TLB miss exceptions (MMU)
 	nop
+!	bra	tlb_miss_hnd
+!	nop
 	bra	_irq_save_regs
 	mov	#2,r4			! Set exception code
 
@@ -319,6 +409,6 @@ _irq_get_sr:
 	stc	sr,r0
 
 
-	.ident	"KOS $Id: entry.s,v 1.5 2003/02/14 06:33:47 bardtx Exp $"
+	.ident	"KOS $Id: entry.s,v 1.7 2003/07/31 00:43:53 bardtx Exp $"
 
 

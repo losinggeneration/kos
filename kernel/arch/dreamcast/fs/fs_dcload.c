@@ -301,22 +301,30 @@ int dcload_unlink(vfs_handler_t * vfs, const char *fn) {
 
 /* Pull all that together */
 static vfs_handler_t vh = {
-    { "/pc" },          /* path prefix */
-    0, 0,		/* In-kernel, no cacheing */
-    NULL,               /* privdata */
-    VFS_LIST_INIT,      /* linked list pointer */
-    dcload_open, 
-    dcload_close,
-    dcload_read,
-    dcload_write,
-    dcload_seek,
-    dcload_tell,
-    dcload_total,
-    dcload_readdir,
-    NULL,               /* ioctl */
-    dcload_rename,
-    dcload_unlink,
-    NULL                /* mmap */
+	/* Name handler */
+	{
+		"/pc",		/* name */
+		0,		/* tbfi */
+		0x00010000,	/* Version 1.0 */
+		0,		/* flags */
+		NMMGR_TYPE_VFS,
+		NMMGR_LIST_INIT
+	},
+
+	0, NULL,	/* no cache, privdata */
+
+	dcload_open, 
+	dcload_close,
+	dcload_read,
+	dcload_write,
+	dcload_seek,
+	dcload_tell,
+	dcload_total,
+	dcload_readdir,
+	NULL,               /* ioctl */
+	dcload_rename,
+	dcload_unlink,
+	NULL                /* mmap */
 };
 
 /* Call this before arch_init_all (or any call to dbgio_*) to use dcload's
@@ -363,7 +371,7 @@ int fs_dcload_init() {
     }
 
     /* Register with VFS */
-    return fs_handler_add("/pc", &vh);
+    return nmmgr_handler_add(&vh.nmmgr);
 }
 
 int fs_dcload_shutdown() {
@@ -388,7 +396,7 @@ int fs_dcload_shutdown() {
 	}
     }
 
-    return fs_handler_remove(&vh);
+    return nmmgr_handler_remove(&vh.nmmgr);
 }
 
 /* used for dcload-ip + lwIP
@@ -407,6 +415,6 @@ int fs_dcload_init_lwip(void *p)
 	return -1;
 
     /* Register with VFS */
-    return fs_handler_add("/pc", &vh);
+    return nmmgr_handler_add(&vh.nmmgr);
 }
 

@@ -5,8 +5,8 @@
 #   
 # $Id: Makefile,v 1.3 2002/08/13 04:54:22 bardtx Exp $
 
-OBJS = fs.o fs_builtin.o fs_romdisk.o fs_ramdisk.o
-OBJS += fs_utils.o
+OBJS = fs.o fs_romdisk.o fs_ramdisk.o fs_pty.o
+OBJS += fs_utils.o elf.o
 SUBDIRS = 
 
 include $(KOS_BASE)/Makefile.prefab

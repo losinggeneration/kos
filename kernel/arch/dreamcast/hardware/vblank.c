@@ -5,6 +5,7 @@
 */
 
 #include <malloc.h>
+#include <errno.h>
 #include <sys/queue.h>
 
 #include <arch/irq.h>
@@ -41,6 +42,10 @@ int vblank_handler_add(asic_evt_handler hnd) {
 	int old;
 
 	vh = malloc(sizeof(struct vblhnd));
+	if (!vh) {
+		errno = ENOMEM;
+		return -1;
+	}
 
 	/* Disable ints just in case */
 	old = irq_disable();

@@ -1,9 +1,9 @@
 /* KallistiOS ##version##
 
    include/kos/cond.h
-   (c)2001 Dan Potter
+   Copyright (C)2001,2003 Dan Potter
 
-   $Id: cond.h,v 1.3 2003/02/16 05:16:40 bardtx Exp $
+   $Id: cond.h,v 1.4 2003/07/31 00:38:00 bardtx Exp $
 
 */
 
@@ -26,24 +26,27 @@ typedef struct condvar {
 
 LIST_HEAD(condlist, condvar);
 
-/* Allocate a new condvar; the condvar will be assigned
-   to the calling process and when that process dies, the condvar
-   will also die. */
+/* Allocate a new condvar. Sets errno to ENOMEM on failure. */
 condvar_t *cond_create();
 
 /* Free a condvar */
 void cond_destroy(condvar_t *cv);
 
 /* Wait on a condvar; if there is an associated mutex to unlock
-   while waiting, then pass that as well. */
-void cond_wait(condvar_t *cv, mutex_t * m);
+   while waiting, then pass that as well. Returns -1 on error.
+     EPERM - called inside interrupt
+     EINTR - wait was interrupted */
+int cond_wait(condvar_t *cv, mutex_t * m);
 
 /* Wait on a condvar; if there is an associated mutex to unlock
    while waiting, then pass that as well. If more than 'timeout'
    milliseconds passes and we still haven't been signaled, return
    an error code (-1). Return success (0) when we are woken normally.
    Note: if 'timeout' is zero, this call is equivalent to 
-   cond_wait above. */
+   cond_wait above.
+     EPERM   - called inside interrupt
+     EAGAIN  - timed out
+     EINTR   - was interrupted */
 int cond_wait_timed(condvar_t *cv, mutex_t * m, int timeout);
 
 /* Signal a single thread waiting on the condvar; you should be

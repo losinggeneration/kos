@@ -7,6 +7,7 @@
 
 #include <stdio.h>
 #include <string.h>
+#include <stdlib.h>
 #include <malloc.h>
 #include <time.h>
 #include <arch/types.h>
@@ -17,7 +18,7 @@
 #include <dc/maple/vmu.h>
 #include <sys/queue.h>
 
-CVSID("$Id: fs_vmu.c,v 1.20 2003/03/22 06:43:14 bardtx Exp $");
+CVSID("$Id: fs_vmu.c,v 1.4 2003/07/31 00:48:42 bardtx Exp $");
 
 /*
 
@@ -99,11 +100,15 @@ vmu_fh_t *vmu_open_vmu_dir() {
 	unsigned int num = 0;
 	char names[MAPLE_PORT_COUNT * MAPLE_UNIT_COUNT][2];
 	vmu_dh_t *dh;
+	maple_device_t * dev;
 
 	/* Determine how many VMUs are connected */
 	for (p=0; p<MAPLE_PORT_COUNT; p++) {
 		for (u=0; u<MAPLE_UNIT_COUNT; u++) {
-			if (maple_device_func(p, u) & MAPLE_FUNC_MEMCARD) {
+			dev = maple_enum_dev(p, u);
+			if (!dev) continue;
+
+			if (dev->info.functions & MAPLE_FUNC_MEMCARD) {
 				names[num][0] = p+'a';
 				names[num][1] = u+'0';
 				num++;
@@ -218,11 +223,11 @@ static vmu_fh_t *vmu_open_file(maple_device_t * dev, const char *path, int mode)
 }
 
 /* open function */
-static file_t vmu_open(vfs_handler_t * vfs, const char *path, int mode) {
+static void * vmu_open(vfs_handler_t * vfs, const char *path, int mode) {
 	maple_device_t	* dev;		/* maple bus address of the vmu unit */
 	vmu_fh_t	*fh;
 
-	if (!*path) {
+	if (!*path || (path[0] == '/' && !path[1])) {
 		/* /vmu should be opened */
 		fh = vmu_open_vmu_dir();
 	} else {
@@ -232,7 +237,7 @@ static file_t vmu_open(vfs_handler_t * vfs, const char *path, int mode) {
 		if (dev == NULL) return 0;
 
 		/* Check for open as dir */
-		if (strlen(path) == 3) {
+		if (strlen(path) == 3 || (strlen(path) == 4 && path[3] == '/')) {
 			if (!(mode & O_DIR)) return 0;
 			fh = vmu_open_dir(dev);
 		} else {
@@ -247,11 +252,11 @@ static file_t vmu_open(vfs_handler_t * vfs, const char *path, int mode) {
 	TAILQ_INSERT_TAIL(&vmu_fh, fh, listent);
 	mutex_unlock(fh_mutex);
 
-	return (file_t)fh;
+	return (void *)fh;
 }
 
 /* Verify that a given hnd is actually in the list */
-static int vmu_verify_hnd(file_t hnd, int type) {
+static int vmu_verify_hnd(void * hnd, int type) {
 	vmu_fh_t	*cur;
 	int		rv;
 
@@ -259,7 +264,7 @@ static int vmu_verify_hnd(file_t hnd, int type) {
 	
 	mutex_lock(fh_mutex);
 	TAILQ_FOREACH(cur, &vmu_fh, listent) {
-		if ((uint32)cur == hnd) {
+		if ((void *)cur == hnd) {
 			rv = 1;
 			break;
 		}
@@ -273,7 +278,7 @@ static int vmu_verify_hnd(file_t hnd, int type) {
 }
 
 /* write a file out before closing it: we aren't perfect on error handling here */
-static int vmu_write_close(file_t hnd) {
+static int vmu_write_close(void * hnd) {
 	vmu_fh_t	*fh;
 
 	fh = (vmu_fh_t*)hnd;
@@ -281,7 +286,7 @@ static int vmu_write_close(file_t hnd) {
 }
 
 /* close a file */
-static void vmu_close(file_t hnd) {
+static void vmu_close(void * hnd) {
 	vmu_fh_t *fh;
 
 	/* Check the handle */
@@ -316,7 +321,7 @@ static void vmu_close(file_t hnd) {
 }
 
 /* read function */
-static ssize_t vmu_read(file_t hnd, void *buffer, size_t cnt) {
+static ssize_t vmu_read(void * hnd, void *buffer, size_t cnt) {
 	vmu_fh_t *fh;
 
 	/* Check the handle */
@@ -345,7 +350,7 @@ static ssize_t vmu_read(file_t hnd, void *buffer, size_t cnt) {
 }
 
 /* write function */
-static ssize_t vmu_write(file_t hnd, const void *buffer, size_t cnt) {
+static ssize_t vmu_write(void * hnd, const void *buffer, size_t cnt) {
 	vmu_fh_t	*fh;
 	void		*tmp;
 	int		n;
@@ -398,7 +403,7 @@ static ssize_t vmu_write(file_t hnd, const void *buffer, size_t cnt) {
 
 /* mmap a file */
 /* note: writing past EOF will invalidate your pointer */
-static void *vmu_mmap(file_t hnd) {
+static void *vmu_mmap(void * hnd) {
 	vmu_fh_t *fh;
 
 	/* Check the handle */
@@ -411,7 +416,7 @@ static void *vmu_mmap(file_t hnd) {
 }
 
 /* Seek elsewhere in a file */
-static off_t vmu_seek(file_t hnd, off_t offset, int whence) {
+static off_t vmu_seek(void * hnd, off_t offset, int whence) {
 	vmu_fh_t *fh;
 
 	/* Check the handle */
@@ -437,7 +442,7 @@ static off_t vmu_seek(file_t hnd, off_t offset, int whence) {
 }
 
 /* tell the current position in the file */
-static off_t vmu_tell(file_t hnd) {
+static off_t vmu_tell(void * hnd) {
 	/* Check the handle */
 	if (!vmu_verify_hnd(hnd, VMU_FILE))
 		return -1;
@@ -446,7 +451,7 @@ static off_t vmu_tell(file_t hnd) {
 }
 
 /* return the filesize */
-static size_t vmu_total(file_t fd) {
+static size_t vmu_total(void * fd) {
 	/* Check the handle */
 	if (!vmu_verify_hnd(fd, VMU_FILE))
 		return -1;
@@ -456,7 +461,7 @@ static size_t vmu_total(file_t fd) {
 }
 
 /* read a directory handle */
-static dirent_t *vmu_readdir(file_t fd) {
+static dirent_t *vmu_readdir(void * fd) {
 	vmu_dh_t	*dh;
 	vmu_dir_t	*dir;
 
@@ -535,10 +540,16 @@ static int vmu_stat(vfs_handler_t * vfs, const char * fn, stat_t * rv) {
 
 /* handler interface */
 static vfs_handler_t vh = {
-	{ "/vmu" },	/* path prefix */
-	0, 1,		/* In-kernel, cache (not implemented yet, however) */
-	NULL,		/* Privdata */
-	VFS_LIST_INIT,	/* Linked list pointer */
+	/* Name handler */
+	{
+		"/vmu",		/* name */
+		0,		/* tbfi */
+		0x00010000,	/* Version 1.0 */
+		0,		/* flags */
+		NMMGR_TYPE_VFS,	/* VFS handler */
+		NMMGR_LIST_INIT
+	},
+	0, NULL,	/* In-kernel, privdata */
 	
 	vmu_open,
 	vmu_close,
@@ -561,7 +572,7 @@ static vfs_handler_t vh = {
 int fs_vmu_init() {
 	TAILQ_INIT(&vmu_fh);
 	fh_mutex = mutex_create();
-	return fs_handler_add("/vmu", &vh);
+	return nmmgr_handler_add(&vh.nmmgr);
 }
 
 int fs_vmu_shutdown() {
@@ -596,6 +607,6 @@ int fs_vmu_shutdown() {
 		mutex_destroy(fh_mutex);
 	fh_mutex = NULL;
 	
-	return fs_handler_remove(&vh);
+	return nmmgr_handler_remove(&vh.nmmgr);
 }
 

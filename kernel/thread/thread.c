@@ -4,9 +4,11 @@
    Copyright (c)2000,2001,2002,2003 Dan Potter
 */
 
+#include <stdlib.h>
 #include <assert.h>
 #include <string.h>
 #include <malloc.h>
+#include <stdio.h>
 #include <kos/thread.h>
 #include <kos/sem.h>
 #include <kos/cond.h>
@@ -199,6 +201,7 @@ void thd_exit() {
 	thd_block_now(&thd_current->context);
 
 	/* not reached */
+	abort();
 }
 
 
@@ -268,9 +271,7 @@ kthread_t *thd_create(void (*routine)(void *param), void *param) {
 
 	nt = NULL;
 
-	if (!irq_inside_int()) {
-		oldirq = irq_disable();
-	}
+	oldirq = irq_disable();
 
 	/* Get a new thread id */
 	tid = thd_next_free();
@@ -310,8 +311,7 @@ kthread_t *thd_create(void (*routine)(void *param), void *param) {
 		}
 	}
 
-	if (!irq_inside_int())
-		irq_restore(oldirq);
+	irq_restore(oldirq);
 	return nt;
 }
 
@@ -321,8 +321,7 @@ int thd_destroy(kthread_t *thd) {
 	int oldirq = 0;
 
 	/* Make sure there are no ints */
-	if (!irq_inside_int())
-		oldirq = irq_disable();
+	oldirq = irq_disable();
 
 	/* If any threads were waiting on this one, then go ahead
 	   and unblock them. */
@@ -340,8 +339,7 @@ int thd_destroy(kthread_t *thd) {
 	free(thd);
 
 	/* Put ints back the way they were */
-	if (!irq_inside_int())
-		irq_restore(oldirq);
+	irq_restore(oldirq);
 
 	return 0;
 }
@@ -441,10 +439,12 @@ void thd_schedule(int front_of_line, uint64 now) {
 	thd->state = STATE_RUNNING;
 
 	/* Make sure the thread hasn't underrun its stack */
-	if ( CONTEXT_SP(thd_current->context) < (ptr_t)(thd_current->stack) ) {
-		thd_pslist(printf);
-		thd_pslist_queue(printf);
-		assert_msg( 0, "Thread stack underrun" );
+	if (thd_current->stack && thd_current->stack_size) {
+		if ( CONTEXT_SP(thd_current->context) < (ptr_t)(thd_current->stack) ) {
+			thd_pslist(printf);
+			thd_pslist_queue(printf);
+			assert_msg( 0, "Thread stack underrun" );
+		}
 	}
 
 	irq_set_context(&thd_current->context);
@@ -455,6 +455,10 @@ void thd_schedule(int front_of_line, uint64 now) {
    interrupt return to jump back to the new thread instead of the one that
    was executing (unless it was already executing). */
 void thd_schedule_next(kthread_t *thd) {
+	/* Can't boost a blocked thread */
+	if (thd_current->state != STATE_READY)
+		return;
+
 	/* Unfortunately we have to take care of this here */
 	if (thd_current->state == STATE_ZOMBIE) {
 		thd_destroy(thd);
@@ -463,8 +467,9 @@ void thd_schedule_next(kthread_t *thd) {
 		thd_add_to_runnable(thd_current, 0);
 	}
 
+	thd_remove_from_runnable(thd);
 	thd_current = thd;
-	thd->state = STATE_RUNNING;
+	thd_current->state = STATE_RUNNING;
 	irq_set_context(&thd_current->context);
 }
 
@@ -659,6 +664,10 @@ const char *thd_get_pwd(kthread_t *thd) {
 
 void thd_set_pwd(kthread_t *thd, const char *pwd) {
 	strncpy(thd->pwd, pwd, sizeof(thd->pwd) - 1);
+}
+
+int * thd_get_errno(kthread_t * thd) {
+	return &thd->thd_errno;
 }
 
 /*****************************************************************************/

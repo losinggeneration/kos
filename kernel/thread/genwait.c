@@ -15,6 +15,10 @@
 
 #include <string.h>
 #include <malloc.h>
+#include <stdio.h>
+#include <assert.h>
+#include <errno.h>
+
 #include <arch/timer.h>
 #include <kos/genwait.h>
 #include <kos/sem.h>
@@ -179,6 +183,7 @@ void genwait_check_timeouts(uint64 tm) {
 			return;
 
 		/* Set an error code */
+		t->thd_errno = EAGAIN;	/* This is fairly close */
 		CONTEXT_RET(t->context) = -1;
 
 		/* If there's a callback, then call it */

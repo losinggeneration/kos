@@ -143,6 +143,34 @@ void g2_write_block_8(const uint8 * input, uint32 address, int amt) {
 	G2_UNLOCK(old);
 }
 
+/* Read a block of 16-bit values from G2 */
+void g2_read_block_16(uint16 * output, uint32 address, int amt) {
+	const vuint16 * input = (const vuint16 *)address;
+	int old = 0;
+
+	G2_LOCK(old);
+
+	while (amt--) {
+		*output++ = *input++;
+	}
+
+	G2_UNLOCK(old);
+}
+
+/* Write a block of 16-bit values to G2 */
+void g2_write_block_16(const uint16 * input, uint32 address, int amt) {
+        vuint16 * output = (vuint16 *)address;
+	int old = 0;
+
+	G2_LOCK(old);
+
+	while (amt--) {
+		*output++ = *input++;
+	}
+
+	G2_UNLOCK(old);
+}
+
 /* Read a block of 32-bit values from G2 */
 void g2_read_block_32(uint32 * output, uint32 address, int amt) {
 	const vuint32 * input = (const vuint32 *)address;

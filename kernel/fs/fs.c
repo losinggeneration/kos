@@ -1,7 +1,7 @@
 /* KallistiOS ##version##
 
    fs.c
-   (c)2000-2001 Dan Potter
+   Copyright (C)2000,2001,2002,2003 Dan Potter
 
 */
 
@@ -14,7 +14,7 @@ something like this:
   installed by loaded servers. When the kernel needs to open a file, it will
   search this path handler table from the bottom until it finds a handler
   that is willing to take the request. The request is then handed off to
-  the handler.
+  the handler. (This function is now handled by the name manager.)
 - The path handler receives the part of the path that is left after the
   part in the handler table. The path handler should return an internal
   handle for accessing the file. An internal handle of zero is always 
@@ -29,84 +29,71 @@ something like this:
 #include <stdio.h>
 #include <malloc.h>
 #include <string.h>
+#include <assert.h>
+#include <errno.h>
 #include <kos/fs.h>
 #include <kos/thread.h>
 #include <kos/mutex.h>
+#include <kos/nmmgr.h>
 
-CVSID("$Id: fs.c,v 1.6 2002/08/12 07:25:58 bardtx Exp $");
-
-/* Thread mutex */
-static mutex_t * mutex;
-
-/* File handler structures; these structs contain path/function pairs that 
-   describe how to handle a given path name. This is used mainly during
-   the open process. */
-static vfs_list_t vfs_handlers;
+CVSID("$Id: fs.c,v 1.10 2003/07/31 00:39:08 bardtx Exp $");
 
 /* File handle structure; this is an entirely internal structure so it does
    not go in a header file. */
-typedef struct {
+typedef struct fs_hnd {
 	vfs_handler_t	*handler;	/* Handler */
-	file_t		hnd;		/* Handler-internal */
+	void *		hnd;		/* Handler-internal */
+	int		refcnt;		/* Reference count */
 } fs_hnd_t;
+
+/* The global file descriptor table */
+fs_hnd_t * fd_table[FD_SETSIZE] = { NULL };
 
 
 /* Internal file commands for root dir reading */
-static file_t fs_root_opendir() {
+static fs_hnd_t * fs_root_opendir() {
 	fs_hnd_t	*hnd;
 
 	hnd = malloc(sizeof(fs_hnd_t));
 	hnd->handler = NULL;
 	hnd->hnd = 0;
-	return (file_t)hnd;
+	hnd->refcnt = 0;
+	return hnd;
 }
 
 /* Not thread-safe right now */
 static dirent_t root_readdir_dirent;
-static dirent_t *fs_root_readdir(file_t hnd) {
-	fs_hnd_t	*handle;
-	vfs_handler_t	*handler;
+static dirent_t *fs_root_readdir(fs_hnd_t * handle) {
+	nmmgr_handler_t	*nmhnd;
+	nmmgr_list_t	*nmhead;
 	int 		cnt;
 
-	handle = (fs_hnd_t*)hnd;
-	cnt = handle->hnd;
+	cnt = (int)handle->hnd;
 
-	LIST_FOREACH(handler, &vfs_handlers, list_ent) {
+	nmhead = nmmgr_get_list();
+
+	LIST_FOREACH(nmhnd, nmhead, list_ent) {
+		if (nmhnd->type != NMMGR_TYPE_VFS)
+			continue;
 		if (!(cnt--))
 			break;
 	}
-	if (handler == NULL)
+	if (nmhnd == NULL)
 		return NULL;
 
 	root_readdir_dirent.size = -1;
-	if (handler->prefix[0] == '/')
-		strcpy(root_readdir_dirent.name, handler->prefix+1);
+	if (nmhnd->pathname[0] == '/')
+		strcpy(root_readdir_dirent.name, nmhnd->pathname+1);
 	else
-		strcpy(root_readdir_dirent.name, handler->prefix);
-	handle->hnd++;
+		strcpy(root_readdir_dirent.name, nmhnd->pathname);
+	handle->hnd = (void *)((int)handle->hnd + 1);
 
 	return &root_readdir_dirent;
 }
 
-/* Locate a file handler for a given path name */
-static vfs_handler_t *fs_get_handler(const char *fn) {
-	vfs_handler_t	*cur;
-
-	/* Scan the handler table and look for a path match */
-	LIST_FOREACH(cur, &vfs_handlers, list_ent) {
-		if (!strnicmp(cur->prefix, fn, strlen(cur->prefix)))
-			break;
-	}
-	if (cur == NULL) {
-		/* Couldn't find a handler */
-		return NULL;
-	} else
-		return cur;
-}
-
 /* Resolve a relative path into a regular path */
 static void fs_resolve_relative(const char *fn, char *rfn) {
-	/* For now we don't do anything but tack on the process'
+	/* For now we don't do anything but tack on the thread's
 	   pwd to the front of the filename. Later we need to do
 	   resolution of '..' and so on. */
 	const char *root;
@@ -119,12 +106,14 @@ static void fs_resolve_relative(const char *fn, char *rfn) {
 	strncat(rfn, fn, (255 - strlen(rfn)) - 1);
 }
 
-/* Attempt to open a file, given a path name. Follows the process described
-   in the above comments. */
-uint32 fs_open(const char *fn, int mode) {
+/* This version of open deals with raw handles only. This is below the level
+   of file descriptors. It is used by the standard fs_open below. The
+   returned handle will have no references attached to it. */
+static fs_hnd_t * fs_hnd_open(const char *fn, int mode) {
+	nmmgr_handler_t	*nmhnd;
 	vfs_handler_t	*cur;
 	const char	*cname;
-	uint32		h;
+	void		*h;
 	fs_hnd_t	*hnd;
 	char		rfn[256];
 
@@ -132,8 +121,10 @@ uint32 fs_open(const char *fn, int mode) {
 	if (!strcmp(fn, "/")) {
 		if ((mode & O_DIR)) 
 			return fs_root_opendir();
-		else
-			return 0;
+		else {
+			errno = EISDIR;
+			return NULL;
+		}
 	}
 
 	/* Are they using a relative path? */
@@ -143,124 +134,331 @@ uint32 fs_open(const char *fn, int mode) {
 	}
 
 	/* Look for a handler */
-	cur = fs_get_handler(fn);
-	if (cur == NULL)
-		return 0;
+	nmhnd = nmmgr_lookup(fn);
+	if (nmhnd == NULL || nmhnd->type != NMMGR_TYPE_VFS) {
+		errno = ENOENT;
+		return NULL;
+	}
+	cur = (vfs_handler_t *)nmhnd;
 
 	/* Found one -- get the "canonical" path name */
-	cname = fn + strlen(cur->prefix);
+	cname = fn + strlen(nmhnd->pathname);
 
 	/* Invoke the handler */
-	if (cur->open == NULL) return 0;
+	if (cur->open == NULL) {
+		errno = ENOSYS;
+		return 0;
+	}
 	h = cur->open(cur, cname, mode);
-	if (h == 0) return 0;
+	if (h == NULL) return NULL;
 
 	/* Wrap it up in a structure */
 	hnd = malloc(sizeof(fs_hnd_t));
 	if (hnd == NULL) {
 		cur->close(h);
-		return 0;
+		errno = ENOMEM;
+		return NULL;
 	}
 	hnd->handler = cur;
 	hnd->hnd = h;
+	hnd->refcnt = 0;
 
-	return (uint32)hnd;
+	return hnd;
+}
+
+/* Reference a file handle. This should be called when a persistent reference
+   to a raw handle is created somewhere. */
+static void fs_hnd_ref(fs_hnd_t * ref) {
+	assert( ref );
+	assert( ref->refcnt < (1 << 30) );
+	ref->refcnt++;
+}
+
+/* Unreference a file handle. Should be called when a persistent reference
+   to a raw handle is no longer applicable. This function may destroy the
+   file handle, so under no circumstances should you presume that it will
+   still exist later. */
+static void fs_hnd_unref(fs_hnd_t * ref) {
+	assert( ref );
+	assert( ref->refcnt > 0 );
+	ref->refcnt--;
+
+	if (ref->refcnt == 0) {
+		if (ref->handler != NULL) {
+			if (ref->handler->close == NULL) return;
+			ref->handler->close(ref->hnd);
+		}
+		free(ref);
+	}
+}
+
+/* Assigns a file descriptor (index) to a file handle (pointer). Will auto-
+   reference the handle, and unrefs on error. */
+static int fs_hnd_assign(fs_hnd_t * hnd) {
+	int i;
+
+	fs_hnd_ref(hnd);
+
+	/* XXX Not thread-safe! */
+	for (i=0; i<FD_SETSIZE; i++)
+		if (!fd_table[i])
+			break;
+	if (i >= FD_SETSIZE) {
+		fs_hnd_unref(hnd);
+		errno = EMFILE;
+		return -1;
+	}
+	fd_table[i] = hnd;
+
+	return i;
+}
+
+int fs_fdtbl_destroy() {
+	int i;
+
+	for (i=0; i<FD_SETSIZE; i++) {
+		if (fd_table[i])
+			fs_hnd_unref(fd_table[i]);
+		fd_table[i] = NULL;
+	}
+
+	return 0;
+}
+
+/* Attempt to open a file, given a path name. Follows the process described
+   in the above comments. */
+file_t fs_open(const char *fn, int mode) {
+	fs_hnd_t * hnd;
+
+	/* First try to open the file handle */
+	hnd = fs_hnd_open(fn, mode);
+	if (!hnd)
+		return -1;
+
+	/* Ok, that succeeded -- now look for a file descriptor. */
+	return fs_hnd_assign(hnd);
+}
+
+/* See header for comments */
+file_t fs_open_handle(vfs_handler_t * vfs, void * vhnd) {
+	fs_hnd_t * hnd;
+
+	/* Wrap it up in a structure */
+	hnd = malloc(sizeof(fs_hnd_t));
+	if (hnd == NULL) {
+		errno = ENOMEM;
+		return -1;
+	}
+	hnd->handler = vfs;
+	hnd->hnd = vhnd;
+	hnd->refcnt = 0;
+
+	/* Ok, that succeeded -- now look for a file descriptor. */
+	return fs_hnd_assign(hnd);
+}
+
+vfs_handler_t * fs_get_handler(file_t fd) {
+	/* Make sure it exists */
+	if (!fd_table[fd]) {
+		errno = EBADF;
+		return NULL;
+	}
+
+	return fd_table[fd]->handler;
+}
+
+void * fs_get_handle(file_t fd) {
+	/* Make sure it exists */
+	if (!fd_table[fd]) {
+		errno = EBADF;
+		return NULL;
+	}
+
+	return fd_table[fd]->hnd;
+}
+
+file_t fs_dup(file_t oldfd) {
+	/* Make sure it exists */
+	if (!fd_table[oldfd]) {
+		errno = EBADF;
+		return -1;
+	}
+
+	return fs_hnd_assign(fd_table[oldfd]);
+}
+
+file_t fs_dup2(file_t oldfd, file_t newfd) {
+	if (!fd_table[oldfd]) {
+		errno = EBADF;
+		return -1;
+	}
+
+	if (fd_table[newfd])
+		fs_close(newfd);
+	fd_table[newfd] = fd_table[oldfd];
+	fs_hnd_ref(fd_table[newfd]);
+
+	return newfd;
+}
+
+/* Returns a file handle for a given fd, or NULL if the parameters
+   are not valid. */
+static fs_hnd_t * fs_map_hnd(file_t fd) {
+	if (fd < 0 || fd >= FD_SETSIZE) {
+		errno = EBADF;
+		return NULL;
+	}
+	if (!fd_table[fd]) {
+		errno = EBADF;
+		return NULL;
+	}
+
+	return fd_table[fd];
 }
 
 /* Close a file and clean up the handle */
-void fs_close(uint32 hnd) {
-	fs_hnd_t *h = (fs_hnd_t*)hnd;
+void fs_close(file_t fd) {
+	fs_hnd_t * hnd = fs_map_hnd(fd);
+	if (!hnd) return;
 
-	if (hnd == 0) return;
-	if (h->handler != NULL) {
-		if (h->handler->close == NULL) return;
-		h->handler->close(h->hnd);
-	}
-	free(h);
+	/* Deref it and remove it from our table */
+	fs_hnd_unref(hnd);
+	fd_table[fd] = NULL;
 }
 
 /* The rest of these pretty much map straight through */
-ssize_t fs_read(uint32 hnd, void *buffer, size_t cnt) {
-	fs_hnd_t *h = (fs_hnd_t*)hnd;
+ssize_t fs_read(file_t fd, void *buffer, size_t cnt) {
+	fs_hnd_t *h = fs_map_hnd(fd);
 
-	if (hnd == 0 || h->handler == NULL || h->handler->read == NULL) return -1;
+	if (h == NULL) return -1;
+	if (h->handler == NULL || h->handler->read == NULL) {
+		errno = EINVAL;
+		return -1;
+	}
 	return h->handler->read(h->hnd, buffer, cnt);
 }
 
-ssize_t fs_write(uint32 hnd, const void *buffer, size_t cnt) {
-	fs_hnd_t *h = (fs_hnd_t*)hnd;
+ssize_t fs_write(file_t fd, const void *buffer, size_t cnt) {
+	fs_hnd_t *h = fs_map_hnd(fd);
 
-	if (hnd == 0 || h->handler == NULL || h->handler->write == NULL) return -1;
+	if (h == NULL) return -1;
+	if (h->handler == NULL || h->handler->write == NULL) {
+		errno = EINVAL;
+		return -1;
+	}
 	return h->handler->write(h->hnd, buffer, cnt);
 }
 
-off_t fs_seek(uint32 hnd, off_t offset, int whence) {
-	fs_hnd_t *h = (fs_hnd_t*)hnd;
+off_t fs_seek(file_t fd, off_t offset, int whence) {
+	fs_hnd_t *h = fs_map_hnd(fd);
 
-	if (hnd == 0 || h->handler == NULL || h->handler->seek == NULL) return -1;
+	if (h == NULL) return -1;
+	if (h->handler == NULL || h->handler->seek == NULL) {
+		errno = EINVAL;
+		return -1;
+	}
 	return h->handler->seek(h->hnd, offset, whence);
 }
 
-off_t fs_tell(uint32 hnd) {
-	fs_hnd_t *h = (fs_hnd_t*)hnd;
+off_t fs_tell(file_t fd) {
+	fs_hnd_t *h = fs_map_hnd(fd);
 
-	if (hnd == 0 || h->handler == NULL || h->handler->tell == NULL) return -1;
+	if (h == NULL) return -1;
+	if (h->handler == NULL || h->handler->tell == NULL) {
+		errno = EINVAL;
+		return -1;
+	}
 	return h->handler->tell(h->hnd);
 }
 
-size_t fs_total(uint32 hnd) {
-	fs_hnd_t *h = (fs_hnd_t*)hnd;
+size_t fs_total(file_t fd) {
+	fs_hnd_t *h = fs_map_hnd(fd);
 
-	if (hnd == 0 || h->handler == NULL || h->handler->total == NULL) return -1;
+	if (h == NULL) return -1;
+	if (h->handler == NULL || h->handler->total == NULL) {
+		errno = EINVAL;
+		return -1;
+	}
 	return h->handler->total(h->hnd);
 }
 
-dirent_t *fs_readdir(uint32 hnd) {
-	fs_hnd_t *h = (fs_hnd_t*)hnd;
+dirent_t *fs_readdir(file_t fd) {
+	fs_hnd_t *h = fs_map_hnd(fd);
 
-	if (hnd == 0) return NULL;
-	if (h->handler == NULL) return fs_root_readdir(hnd);
-	if (h->handler->readdir == NULL) return NULL;
+	if (h == NULL) return NULL;
+	if (h->handler == NULL) return fs_root_readdir(h);
+	if (h->handler->readdir == NULL) {
+		errno = EINVAL;
+		return NULL;
+	}
+	errno = 0;
 	return h->handler->readdir(h->hnd);
 }
 
-int fs_ioctl(uint32 hnd, void *data, size_t size) {
-	fs_hnd_t *h = (fs_hnd_t*)hnd;
+int fs_ioctl(file_t fd, void *data, size_t size) {
+	fs_hnd_t *h = fs_map_hnd(fd);
 
-	if (hnd == 0 || h->handler == NULL || h->handler->ioctl == NULL) return -1;
+	if (h == NULL) return -1;
+	if (h->handler == NULL || h->handler->ioctl == NULL) {
+		errno = EINVAL;
+		return -1;
+	}
 	return h->handler->ioctl(h->hnd, data, size);
+}
+
+static vfs_handler_t * fs_verify_handler(const char * fn) {
+	nmmgr_handler_t	*nh;
+
+	nh = nmmgr_lookup(fn);
+	if (nh == NULL || nh->type != NMMGR_TYPE_VFS)
+		return NULL;
+	else
+		return (vfs_handler_t *)nh;
 }
 
 int fs_rename(const char *fn1, const char *fn2) {
 	vfs_handler_t	*fh1, *fh2;
 	
 	/* Look for handlers */
-	fh1 = fs_get_handler(fn1);
-	if (fh1 == NULL) return -1;
+	fh1 = fs_verify_handler(fn1);
+	if (fh1 == NULL) {
+		errno = ENOENT;
+		return -1;
+	}
 	
-	fh2 = fs_get_handler(fn2);
-	if (fh2 == NULL) return -1;
+	fh2 = fs_verify_handler(fn1);
+	if (fh2 == NULL) {
+		errno = ENOENT;
+		return -1;
+	}
 	
-	if (fh1 != fh2) return -2;
+	if (fh1 != fh2) {
+		errno = EXDEV;
+		return -1;
+	}
 
 	if (fh1->rename)
-		return fh1->rename(fh1, fn1+strlen(fh1->prefix),
-			fn2+strlen(fh1->prefix));
-	else
-		return -3;
+		return fh1->rename(fh1, fn1+strlen(fh1->nmmgr.pathname),
+			fn2+strlen(fh1->nmmgr.pathname));
+	else {
+		errno = EINVAL;
+		return -1;
+	}
 }
 
 int fs_unlink(const char *fn) {
 	vfs_handler_t	*cur;
 	
 	/* Look for a handler */
-	cur = fs_get_handler(fn);
+	cur = fs_verify_handler(fn);
 	if (cur == NULL) return 1;
 
 	if (cur->unlink)
-		return cur->unlink(cur, fn+strlen(cur->prefix));
-	else
+		return cur->unlink(cur, fn+strlen(cur->nmmgr.pathname));
+	else {
+		errno = EINVAL;
 		return -1;
+	}
 }
 
 int fs_chdir(const char *fn) {
@@ -272,17 +470,25 @@ const char *fs_getwd() {
 	return thd_get_pwd(thd_get_current());
 }
 
-void *fs_mmap(file_t hnd) {
-	fs_hnd_t *h = (fs_hnd_t*)hnd;
+void *fs_mmap(file_t fd) {
+	fs_hnd_t *h = fs_map_hnd(fd);
 
-	if (hnd == 0 || h->handler == NULL || h->handler->mmap == NULL) return NULL;
+	if (h == NULL) return NULL;
+	if (h->handler == NULL || h->handler->mmap == NULL) {
+		errno = EINVAL;
+		return NULL;
+	}
 	return h->handler->mmap(h->hnd);
 }
 
-int fs_complete(file_t hnd, ssize_t * rv) {
-	fs_hnd_t *h = (fs_hnd_t*)hnd;
+int fs_complete(file_t fd, ssize_t * rv) {
+	fs_hnd_t *h = fs_map_hnd(fd);
 
-	if (hnd == 0 || h->handler == NULL || h->handler->complete == NULL) return -1;
+	if (h == NULL) return -1;
+	if (h->handler == NULL || h->handler->complete == NULL) {
+		errno = EINVAL;
+		return -1;
+	}
 	return h->handler->complete(h->hnd, rv);
 }
 
@@ -290,97 +496,52 @@ int fs_stat(const char * fn, stat_t * rv) {
 	vfs_handler_t	*cur;
 	
 	/* Look for a handler */
-	cur = fs_get_handler(fn);
-	if (cur == NULL) return 1;
+	cur = fs_verify_handler(fn);
+	if (cur == NULL) return -1;
 
 	if (cur->stat)
-		return cur->stat(cur, fn+strlen(cur->prefix), rv);
-	else
+		return cur->stat(cur, fn+strlen(cur->nmmgr.pathname), rv);
+	else {
+		errno = EINVAL;
 		return -1;
+	}
 }
 
 int fs_mkdir(const char * fn) {
 	vfs_handler_t	*cur;
 	
 	/* Look for a handler */
-	cur = fs_get_handler(fn);
-	if (cur == NULL) return 1;
+	cur = fs_verify_handler(fn);
+	if (cur == NULL) return -1;
 
 	if (cur->mkdir)
-		return cur->mkdir(cur, fn+strlen(cur->prefix));
-	else
+		return cur->mkdir(cur, fn+strlen(cur->nmmgr.pathname));
+	else {
+		errno = EINVAL;
 		return -1;
+	}
 }
 
 int fs_rmdir(const char * fn) {
 	vfs_handler_t	*cur;
 	
 	/* Look for a handler */
-	cur = fs_get_handler(fn);
-	if (cur == NULL) return 1;
+	cur = fs_verify_handler(fn);
+	if (cur == NULL) return -1;
 
 	if (cur->rmdir)
-		return cur->rmdir(cur, fn+strlen(cur->prefix));
-	else
+		return cur->rmdir(cur, fn+strlen(cur->nmmgr.pathname));
+	else {
+		errno = EINVAL;
 		return -1;
-}
-
-
-/* Add a VFS module */
-int fs_handler_add(const char *prefix, vfs_handler_t *hnd) {
-	mutex_lock(mutex);
-
-	strcpy(hnd->prefix, prefix);
-	LIST_INSERT_HEAD(&vfs_handlers, hnd, list_ent);
-
-	mutex_unlock(mutex);
-
-	return 0;
-}
-
-/* Remove a VFS module */
-int fs_handler_remove(const vfs_handler_t *hnd) {
-	vfs_handler_t *c;
-	int rv = -1;
-
-	mutex_lock(mutex);
-
-	/* Verify that it's actually in there */
-	LIST_FOREACH(c, &vfs_handlers, list_ent) {
-		if (c == hnd) {
-			LIST_REMOVE(hnd, list_ent);
-			rv = 0;
-			break;
-		}
 	}
-
-	mutex_unlock(mutex);
-
-	return rv;
 }
+
 
 /* Initialize FS structures */
 int fs_init() {
-	int rv = 0;
-
-	/* Start with no handlers */
-	LIST_INIT(&vfs_handlers);
-
-	/* Init thread mutex */
-	mutex = mutex_create();
-
-	return rv;
+	return 0;
 }
 
 void fs_shutdown() {
-	vfs_handler_t *c, *n;
-
-	c = LIST_FIRST(&vfs_handlers);
-	while (c != NULL) {
-		n = LIST_NEXT(c, list_ent);
-		free(c);
-		c = n;
-	}
-
-	mutex_destroy(mutex);
 }

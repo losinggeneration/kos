@@ -155,9 +155,9 @@ void pvr_mem_free(pvr_ptr_t chunk) {
 	pvr_int_free((void *)chunk);
 }
 
-#ifdef KM_DBG
 /* Check the memory block list to see what's allocated */
 void pvr_mem_print_list() {
+#ifdef KM_DBG
 	memctl_t	* ctl;
 
 	printf("pvr_mem_print_list block list:\n");
@@ -166,9 +166,8 @@ void pvr_mem_print_list() {
 			ctl->block, ctl->size, ctl->thread, ctl->addr);
 	}
 	printf("pvr_mem_print_list end block list\n");
-}
-
 #endif	/* KM_DBG */
+}
 
 /* Return the number of bytes available still in the memory pool */
 static uint32 pvr_mem_available_int() {

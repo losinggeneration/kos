@@ -13,6 +13,8 @@
 #include <arch/irq.h>
 #include <arch/timer.h>
 #include <arch/dbgio.h>
+#include <kos/thread.h>
+#include <kos/library.h>
 
 CVSID("$Id: irq.c,v 1.12 2003/02/14 06:33:47 bardtx Exp $");
 
@@ -86,6 +88,7 @@ void irq_dump_regs(int code, int evt) {
 	dbglog(DBG_DEAD, " R8-R15: %08lx %08lx %08lx %08lx %08lx %08lx %08lx %08lx\n",
 		regs[8], regs[9], regs[10], regs[11], regs[12], regs[13], regs[14], regs[15]);
 	dbglog(DBG_DEAD, " SR %08lx PR %08lx\n", irq_srt_addr->sr, irq_srt_addr->pr);
+	arch_stk_trace_at(regs[14], 0);
 	/* dbgio_printf(" Vicinity code ");
 	dbgio_printf(" @%08lx: %04x %04x %04x %04x %04x\n",
 		srt_addr->pc-4, *((uint16*)(srt_addr->pc-4)), *((uint16*)(srt_addr->pc-2)),
@@ -119,6 +122,8 @@ void irq_handle_exception(int code) {
 			hnd(EXC_DOUBLE_FAULT, irq_srt_addr);
 		} else
 			irq_dump_regs(code, evt);
+		thd_pslist(dbgio_printf);
+		// library_print_list(dbgio_printf);
 		panic("double fault");
 	}
 

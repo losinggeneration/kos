@@ -208,6 +208,9 @@ int dbgio_printf(const char *fmt, ...) {
 	va_list args;
 	int i;
 
+	/* XXX This isn't correct. We could be inside an int with IRQs
+	  enabled, and we could be outside an int with IRQs disabled, which
+	  would cause a deadlock here. We need an irq_is_enabled()! */
 	if (!irq_inside_int())
 		spinlock_lock(&lock);
 

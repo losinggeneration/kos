@@ -3,7 +3,7 @@
    include/kos/thread.h
    Copyright (C)2000,2001,2002,2003 Dan Potter
 
-   $Id: thread.h,v 1.11 2003/04/24 03:01:20 bardtx Exp $
+   $Id: thread.h,v 1.13 2003/06/23 05:19:50 bardtx Exp $
 
 */
 
@@ -82,6 +82,10 @@ typedef struct kthread {
 	   of a stack page. */
 	uint32	*stack;
 	uint32	stack_size;
+
+	/* Our errno variable */
+	/* XXX: Move to TLS */
+	int	thd_errno;
 } kthread_t;
 
 /* Thread flag values */
@@ -151,7 +155,7 @@ int thd_destroy(kthread_t *thd);
 
 /* Thread exit syscall (for use in user-mode processes, but can be used
    anywhere). */
-void thd_exit();
+void thd_exit() __noreturn;
 
 /* Force a re-schedule; for most cases, you'll want to set front_of_line
    to zero, but read the comments in kernel/thread/thread.c for more
@@ -183,6 +187,9 @@ void thd_set_label(kthread_t *thd, const char *label);
 /* Retrieve / set thread pwd */
 const char *thd_get_pwd(kthread_t *thd);
 void thd_set_pwd(kthread_t *thd, const char *pwd);
+
+/* Retrieve a pointer to the thread errno */
+int * thd_get_errno(kthread_t *thd);
 
 /* Change threading modes */
 int thd_set_mode(int mode);

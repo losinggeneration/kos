@@ -26,8 +26,8 @@ void mutex_destroy(mutex_t * m) {
 }
 
 /* Attempt to lock the mutex; if it's busy, then block */
-void mutex_lock(mutex_t * m) {
-	sem_wait(m);
+int mutex_lock(mutex_t * m) {
+	return sem_wait(m);
 }
 
 /* Attempt to lock the mutex; if it's busy and it takes longer than the
@@ -41,6 +41,10 @@ int mutex_lock_timed(mutex_t * m, int timeout) {
    get to locking it. */
 int mutex_is_locked(mutex_t * m) {
 	return sem_count(m) <= 0;
+}
+
+int mutex_trylock(mutex_t * m) {
+	return sem_trywait(m);
 }
 
 /* Unlock the mutex */

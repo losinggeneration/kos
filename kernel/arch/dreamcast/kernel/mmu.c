@@ -13,12 +13,11 @@
 #include <arch/arch.h>
 #include <arch/types.h>
 #include <arch/irq.h>
-#include <arch/syscall.h>
 #include <arch/mmu.h>
 #include <arch/dbgio.h>
 #include <arch/cache.h>
 
-CVSID("$Id: mmu.c,v 1.3 2002/10/08 07:46:20 bardtx Exp $");
+CVSID("$Id: mmu.c,v 1.5 2003/07/31 00:43:53 bardtx Exp $");
 
 /********************************************************************************/
 /* Register definitions */
@@ -33,6 +32,9 @@ static volatile uint32 * const mmucr = (uint32 *)(0xff000010);
 #define SET_PTEH(VA, ASID) \
 	do { *pteh = ((VA) & 0xfffffc00) | ((ASID) & 0xff); } while(0)
 
+#define BUILD_PTEH(VA, ASID) \
+	( ((VA) & 0xfffffc00) | ((ASID) & 0xff) )
+
 #define SET_PTEL(PA, V, SZ, PR, C, D, SH, WT) \
 	do { *ptel = ((PA) & 0x1ffffc00) | ((V) << 8) \
 		| ( ((SZ) & 2) << 6 ) | ( ((SZ) & 1) << 4 ) \
@@ -41,6 +43,15 @@ static volatile uint32 * const mmucr = (uint32 *)(0xff000010);
 		| ( (D) << 2 ) \
 		| ( (SH) << 1 ) \
 		| ( (WT) << 0 ); } while(0)
+
+#define BUILD_PTEL(PA, V, SZ, PR, C, D, SH, WT) \
+	( ((PA) & 0x1ffffc00) | ((V) << 8) \
+		| ( ((SZ) & 2) << 6 ) | ( ((SZ) & 1) << 4 ) \
+		| ( (PR) << 5 ) \
+		| ( (C) << 3 ) \
+		| ( (D) << 2 ) \
+		| ( (SH) << 1 ) \
+		| ( (WT) << 0 ) )
 
 #define SET_TTB(TTB) \
 	do { *ttb = TTB; } while(0)
@@ -65,7 +76,18 @@ static volatile uint32 * const mmucr = (uint32 *)(0xff000010);
 /********************************************************************************/
 
 /* "Current" page tables (for TLB exception handling) */
-mmucontext_t *mmu_cxt_current;
+mmucontext_t *mmu_cxt_current = NULL;
+
+/* This value will be non-zero if we can safely shortcut the standard tlb-miss
+   exception handling. */
+int mmu_shortcut_ok = 0;
+
+/* The last URC value we used */
+static int last_urc;
+
+/* Our TLB mapping function */
+static mmu_mapfunc_t map_func;
+
 
 /********************************************************************************/
 /* Physical hardware management */
@@ -74,6 +96,11 @@ static inline void mmu_ldtlb(int asid, uint32 virt, uint32 phys, int sz, int pr,
 		int sh, int wt) {
 	SET_PTEH(virt, asid);
 	SET_PTEL(phys, 1, sz, pr, c, d, sh, wt);
+	asm("ldtlb");
+}
+static inline void mmu_ldtlb_quick(uint32 ptehv, uint32 ptelv) {
+	*pteh = ptehv;
+	*ptel = ptelv;
 	asm("ldtlb");
 }
 static inline void mmu_ldtlb_wait() {
@@ -90,12 +117,20 @@ static inline void mmu_ldtlb_wait() {
 /* Defined in mmuitlb.s */
 void mmu_reset_itlb();
 
+/* Defined below */
+static mmupage_t *map_virt(mmucontext_t *context, int virtpage);
+
 /********************************************************************************/
 /* Table management */
 
 /* Set the "current" page tables for TLB handling */
 void mmu_use_table(mmucontext_t *context) {
 	mmu_cxt_current = context;
+
+	if (mmu_cxt_current && map_func == map_virt)
+		mmu_shortcut_ok = 1;
+	else
+		mmu_shortcut_ok = 0;
 }
 
 /* Allocate a page table shell; no actual sub-contexts will be allocated
@@ -214,6 +249,10 @@ static void mmu_page_map_single(mmucontext_t *context,
 	page->blank = 0;
 	page->shared = share;
 	page->valid = 1;
+
+	page->pteh = BUILD_PTEH(virtpage, 0);
+	page->ptel = BUILD_PTEL(page->physical << PAGESIZE_BITS, 1, 1, page->prkey,
+		page->cache, page->dirty, page->shared, page->wthru);
 }
 
 /* Map N pages sequentially */
@@ -483,9 +522,6 @@ int mmu_copyv(mmucontext_t *context1, iovec_t *iov1, int iovcnt1,
 /********************************************************************************/
 /* Exception handlers */
 
-static int last_urc;
-static mmu_mapfunc_t map_func;
-
 mmu_mapfunc_t mmu_map_get_callback() {
 	return map_func;
 }
@@ -493,6 +529,12 @@ mmu_mapfunc_t mmu_map_get_callback() {
 mmu_mapfunc_t mmu_map_set_callback(mmu_mapfunc_t newfunc) {
 	mmu_mapfunc_t tmp = map_func;
 	map_func = newfunc;
+
+	if (mmu_cxt_current && map_func == map_virt)
+		mmu_shortcut_ok = 1;
+	else
+		mmu_shortcut_ok = 0;
+
 	return tmp;
 }
 
@@ -504,6 +546,7 @@ static void unhandled_mmu(irq_t source, irq_context_t *context) {
 	dbgio_printf(" PTEH = %08lx, PTEL = %08lx\n", *pteh, *ptel);
 	dbgio_printf(" TTB = %08lx, TEA = %08lx\n", *ttb, *tea);
 	dbgio_printf(" MMUCR = %08lx\n", *mmucr);
+	dbgio_printf(" PR = %08lx\n", context->pr);
 
 	for (i=0; i<512; i++)
 		dbgio_flush();
@@ -513,9 +556,9 @@ static void unhandled_mmu(irq_t source, irq_context_t *context) {
 
 /* Generic handler that takes a missed TLB exception and loads the
    appropriate entry into the UTLB. */
-static void gen_tlb_miss(const char *what, irq_t source, irq_context_t *context) {
+void mmu_gen_tlb_miss(const char *what, irq_t source, irq_context_t *context) {
 	mmupage_t *page;
-	uint32 addr;
+	uint32 addr, ptehv, ptelv;
 
 	/* Get the offending reference */
 	addr = *tea;
@@ -542,24 +585,27 @@ static void gen_tlb_miss(const char *what, irq_t source, irq_context_t *context)
 	}
 
 	/* Make sure we don't overwrite the last TLB entry */
-	if (GET_URC() == last_urc) {
+	/* if (GET_URC() == last_urc) {
 		last_urc++;
 		SET_URC(last_urc);
 	} else {
 		last_urc = GET_URC();
-	}
+	} */
 
 	/* Load the mapping */
 	//dbgio_printf("asid %d: loading up mapping %08x -> %08x, prkey=%d into %x\n",
 	//	proc_current->pt->asid, *tea, page->physical << PAGESIZE_BITS, page->prkey, last_urc);
-	mmu_ldtlb(mmu_cxt_current->asid, *tea, page->physical << PAGESIZE_BITS, 1, page->prkey,
+	ptehv = page->pteh | mmu_cxt_current->asid;
+	ptelv = page->ptel;
+	mmu_ldtlb_quick(ptehv, ptelv);
+	/* mmu_ldtlb(mmu_cxt_current->asid, *tea, page->physical << PAGESIZE_BITS, 1, page->prkey,
 		page->cache, page->dirty, page->shared, page->wthru);
-	mmu_ldtlb_wait();
+	mmu_ldtlb_wait(); */
 }
 
 /* Instruction TLB miss exception */
 static void itlb_miss(irq_t source, irq_context_t *context) {
-	gen_tlb_miss("itlb_miss", source, context);
+	mmu_gen_tlb_miss("itlb_miss", source, context);
 }
 
 /* Instruction TLB protection violation */
@@ -572,12 +618,12 @@ static void itlb_pv(irq_t source, irq_context_t *context) {
 
 /* Data TLB miss (read) */
 static void dtlb_miss_read(irq_t source, irq_context_t *context) {
-	gen_tlb_miss("dtlb_miss_read", source, context);
+	mmu_gen_tlb_miss("dtlb_miss_read", source, context);
 }
 
 /* Data TLB miss (write) */
 static void dtlb_miss_write(irq_t source, irq_context_t *context) {
-	gen_tlb_miss("dtlb_miss_write", source, context);
+	mmu_gen_tlb_miss("dtlb_miss_write", source, context);
 }
 
 /* Data TLB protection violation (read) */
@@ -611,6 +657,9 @@ int mmu_init() {
 	/* No context yet */
 	mmu_cxt_current = NULL;
 
+	/* No context -- shortcuts not OK yet */
+	mmu_shortcut_ok = 0;
+
 	/* Set up interrupt handlers */
 	irq_set_handler(EXC_ITLB_MISS, itlb_miss);
 	irq_set_handler(EXC_ITLB_PV, itlb_pv);
@@ -635,7 +684,10 @@ int mmu_init() {
 void mmu_shutdown() {
 	/* Turn off MMU */
 	*mmucr = 0x00000204;
-	
+
+	/* No more shortcuts */	
+	mmu_shortcut_ok = 0;
+
 	/* Unhook the IRQ handlers */
 	irq_set_handler(EXC_ITLB_MISS, NULL);
 	irq_set_handler(EXC_ITLB_PV, NULL);

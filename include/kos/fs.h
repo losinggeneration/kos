@@ -1,9 +1,9 @@
 /* KallistiOS ##version##
 
    kos/fs.h
-   (c)2000-2001 Dan Potter
+   Copyright (C)2000,2001,2002,2003 Dan Potter
 
-   $Id: fs.h,v 1.9 2002/10/01 03:19:59 bardtx Exp $
+   $Id: fs.h,v 1.11 2003/07/31 00:38:00 bardtx Exp $
 
 */
 
@@ -18,6 +18,8 @@ __BEGIN_DECLS
 #include <time.h>
 #include <sys/queue.h>
 
+#include <kos/nmmgr.h>
+
 /* Directory entry; all handlers must conform to this interface */
 typedef struct dirent {
 	int	size;
@@ -28,9 +30,9 @@ typedef struct dirent {
 
 /* File status information; like dirent, this is not the same as the *nix
    variation but it has similar information. */
-struct vfs_handler_str;
+struct vfs_handler;
 typedef struct stat {
-	struct vfs_handler_str	* dev;		/* The VFS handler for this file/dir */
+	struct vfs_handler	* dev;		/* The VFS handler for this file/dir */
 	uint32			unique;		/* A unique identifier on the VFS for this file/dir */
 	uint32			type;		/* File/Dir type */
 	uint32			attr;		/* Attributes */
@@ -54,53 +56,47 @@ typedef struct stat {
 #define STAT_ATTR_W		0x02	/* Write-capable */
 #define STAT_ATTR_RW		(STAT_ATTR_R | STAT_ATTR_W)	/* Read/Write capable */
 
-/* File handle type */
-typedef uint32 file_t;
+/* File descriptor type */
+typedef int file_t;
 
 /* Invalid file handle constant (for open failure, etc) */
-#define FILEHND_INVALID	((file_t)0)
-
-/* Pre-define list types */
-struct vfs_handler;
-typedef LIST_HEAD(vfs_list, vfs_handler) vfs_list_t;
-
-/* List entry initializer for static structs */
-#define VFS_LIST_INIT { NULL }
+#define FILEHND_INVALID	((file_t)-1)
 
 /* Handler interface; all VFS handlers must implement this interface. */
 typedef struct vfs_handler {
-	char	prefix[MAX_FN_LEN];	/* Path prefix */
-	int	pid;			/* Process table ID for handler (0 == static) */
+	/* Name manager handler header */
+	nmmgr_handler_t		nmmgr;
+
+	/* Some VFS-specific pieces */
 	int	cache;			/* Allow VFS cacheing; 0=no, 1=yes */
 	void	* privdata;		/* Pointer to private data for the handler */
-	LIST_ENTRY(vfs_handler)	list_ent;	/* Linked list entry */
 
 	/* Open a file on the given VFS; return a unique identifier */
-	file_t	(*open)(struct vfs_handler * vfs, const char *fn, int mode);
+	void *	(*open)(struct vfs_handler * vfs, const char *fn, int mode);
 
 	/* Close a previously opened file */
-	void	(*close)(file_t hnd);
+	void	(*close)(void * hnd);
 
 	/* Read from a previously opened file */
-	ssize_t	(*read)(file_t hnd, void *buffer, size_t cnt);
+	ssize_t	(*read)(void * hnd, void *buffer, size_t cnt);
 
 	/* Write to a previously opened file */
-	ssize_t	(*write)(file_t hnd, const void *buffer, size_t cnt);
+	ssize_t	(*write)(void * hnd, const void *buffer, size_t cnt);
 
 	/* Seek in a previously opened file */
-	off_t	(*seek)(file_t hnd, off_t offset, int whence);
+	off_t	(*seek)(void * hnd, off_t offset, int whence);
 
 	/* Return the current position in a previously opened file */
-	off_t	(*tell)(file_t hnd);
+	off_t	(*tell)(void * hnd);
 
 	/* Return the total size of a previously opened file */
-	size_t	(*total)(file_t hnd);
+	size_t	(*total)(void * hnd);
 
 	/* Read the next directory entry in a directory opened with O_DIR */
-	dirent_t* (*readdir)(file_t hnd);
+	dirent_t* (*readdir)(void * hnd);
 
 	/* Execute a device-specific call on a previously opened file */
-	int	(*ioctl)(file_t hnd, void *data, size_t size);
+	int	(*ioctl)(void * hnd, void *data, size_t size);
 
 	/* Rename/move a file on the given VFS */
 	int	(*rename)(struct vfs_handler * vfs, const char *fn1, const char *fn2);
@@ -109,10 +105,10 @@ typedef struct vfs_handler {
 	int	(*unlink)(struct vfs_handler * vfs, const char *fn);
 
 	/* "Memory map" a previously opened file */
-	void*	(*mmap)(file_t fd);
+	void*	(*mmap)(void * fd);
 
 	/* Perform an I/O completion (async I/O) for a previously opened file */
-	int	(*complete)(file_t fd, ssize_t * rv);
+	int	(*complete)(void * fd, ssize_t * rv);
 
 	/* Get status information on a file on the given VFS */
 	int	(*stat)(struct vfs_handler * vfs, const char * fn, stat_t * rv);
@@ -124,6 +120,16 @@ typedef struct vfs_handler {
 	int	(*rmdir)(struct vfs_handler * vfs, const char * fn);
 } vfs_handler_t;
 
+/* This is the number of distinct file descriptors the global table
+   has in it. */
+#define FD_SETSIZE	1024
+
+/* This is the private struct that will be used as raw file handles
+   underlying descriptors. */
+struct fs_hnd;
+
+/* The kernel-wide file descriptor table. These will reference to open files. */
+extern struct fs_hnd * fd_table[FD_SETSIZE];
 
 /* Open modes */
 #define O_RDONLY	1		/* Read only */
@@ -133,6 +139,7 @@ typedef struct vfs_handler {
 #define O_MODE_MASK	7		/* Mask for mode numbers */
 #define O_TRUNC		0x0100		/* Truncate */
 #define O_ASYNC		0x0200		/* Open for asynchronous I/O */
+#define O_NONBLOCK	0x0400		/* Open for non-blocking I/O */
 #define O_DIR		0x1000		/* Open as directory */
 #define O_META		0x2000		/* Open as metadata */
 
@@ -141,7 +148,7 @@ typedef struct vfs_handler {
 #define SEEK_CUR 1
 #define SEEK_END 2
 
-/* Standard file functions */
+/* Standard file descriptor functions */
 file_t	fs_open(const char *fn, int mode);
 void	fs_close(file_t hnd);
 ssize_t	fs_read(file_t hnd, void *buffer, size_t cnt);
@@ -159,7 +166,24 @@ int	fs_complete(file_t fd, ssize_t * rv);
 int	fs_stat(const char * fn, stat_t * rv);
 int	fs_mkdir(const char * fn);
 int	fs_rmdir(const char * fn);
+file_t	fs_dup(file_t oldfd);
+file_t	fs_dup2(file_t oldfd, file_t newfd);
 
+/* Call this function to create a "transient" file descriptor. What this
+   does for you is let you setup ad-hoc VFS integration for libs that
+   have their own open mechanism (e.g., TCP/IP sockets). It could also be
+   used to do things like generic resource management. Calling this
+   function is functionally identical to fs_open, except it doesn't
+   require registering a full VFS or doing a name lookup. */
+file_t	fs_open_handle(vfs_handler_t * vfs, void * hnd);
+
+/* These two functions are used to reveal "internal" info about a file
+   descriptor, so that libraries can provide their own facilities using
+   VFS-sponsored file descriptors (e.g., TCP/IP bind, connect, etc). */
+vfs_handler_t * fs_get_handler(file_t fd);
+void * fs_get_handle(file_t fd);
+
+/* Returns the working directory of the current thread */
 const char *fs_getwd();
 
 /* Couple of util functions */
@@ -174,10 +198,6 @@ ssize_t	fs_copy(const char * src, const char * dst);
    on failure; on success, out_ptr is filled with the address
    of the loaded buffer, and on failure it is set to NULL. */
 ssize_t fs_load(const char * src, void ** out_ptr);
-
-/* Add/Remove a VFS module */
-int	fs_handler_add(const char *prefix, vfs_handler_t *hnd);
-int	fs_handler_remove(const vfs_handler_t *hnd);
 
 /* VFS init */
 int	fs_init();

@@ -1,7 +1,7 @@
 /* KallistiOS ##version##
 
    fs_romdisk.c
-   (c)2001-2002 Dan Potter
+   Copyright (C)2001,2002,2003 Dan Potter
 
 */
 
@@ -22,8 +22,10 @@ on sunsite.unc.edu in /pub/Linux/system/recovery/, or as a package under Debian 
 #include <malloc.h>
 #include <string.h>
 #include <stdio.h>
+#include <assert.h>
+#include <errno.h>
 
-CVSID("$Id: fs_romdisk.c,v 1.9 2002/10/26 08:20:10 bardtx Exp $");
+CVSID("$Id: fs_romdisk.c,v 1.11 2003/07/31 00:39:08 bardtx Exp $");
 
 /* Header definitions from Linux ROMFS documentation; all integer quantities are
    expressed in big-endian notation. Unfortunately the ROMFS guys were being
@@ -64,7 +66,7 @@ typedef LIST_HEAD(rdi_list, rd_image) rdi_list_t;
 typedef struct rd_image {
 	LIST_ENTRY(rd_image) list_ent;	/* List entry */
 
-	int			own_buffer;	/* Do we own the image buffer? */
+	int			own_buffer;	/* Do we own the memory? */
 	const uint8		* image;	/* The actual image */
 	const romdisk_hdr_t	* hdr;		/* Pointer to the header */
 	uint32			files;		/* Offset in the image to the files area */
@@ -177,15 +179,17 @@ static uint32 romdisk_find(rd_image_t * mnt, const char *fn, int dir) {
 }
 
 /* Open a file or directory */
-static file_t romdisk_open(vfs_handler_t * vfs, const char *fn, int mode) {
-	uint32			fd;
+static void * romdisk_open(vfs_handler_t * vfs, const char *fn, int mode) {
+	file_t			fd;
 	uint32			filehdr;
 	const romdisk_file_t	*fhdr;
 	rd_image_t		*mnt = (rd_image_t *)vfs->privdata;
 
 	/* Make sure they don't want to open things as writeable */
-	if ((mode & O_MODE_MASK) != O_RDONLY)
-		return FILEHND_INVALID;
+	if ((mode & O_MODE_MASK) != O_RDONLY) {
+		errno = EPERM;
+		return NULL;
+	}
 	
 	/* No blank filenames */
 	if (fn[0] == 0)
@@ -193,8 +197,10 @@ static file_t romdisk_open(vfs_handler_t * vfs, const char *fn, int mode) {
 
 	/* Look for the file */
 	filehdr = romdisk_find(mnt, fn + 1, mode & O_DIR);
-	if (filehdr == 0)
-		return 0;
+	if (filehdr == 0) {
+		errno = ENOENT;
+		return NULL;
+	}
 
 	/* Find a free file handle */
 	mutex_lock(fh_mutex);
@@ -204,8 +210,10 @@ static file_t romdisk_open(vfs_handler_t * vfs, const char *fn, int mode) {
 			break;
 		}
 	mutex_unlock(fh_mutex);
-	if (fd >= MAX_RD_FILES)
-		return FILEHND_INVALID;
+	if (fd >= MAX_RD_FILES) {
+		errno = ENFILE;
+		return NULL;
+	}
 	
 	/* Fill the fd structure */
 	fhdr = (const romdisk_file_t *)(mnt->image + filehdr);
@@ -215,11 +223,12 @@ static file_t romdisk_open(vfs_handler_t * vfs, const char *fn, int mode) {
 	fh[fd].size = ntohl_32(&fhdr->size);
 	fh[fd].mnt = mnt;
 	
-	return fd;
+	return (void *)fd;
 }
 
 /* Close a file or directory */
-static void romdisk_close(file_t fd) {
+static void romdisk_close(void * h) {
+	file_t fd = (file_t)h;
 	/* Check that the fd is valid */
 	if (fd < MAX_RD_FILES) {
 		/* No need to lock the mutex: this is an atomic op */
@@ -228,10 +237,14 @@ static void romdisk_close(file_t fd) {
 }
 
 /* Read from a file */
-static ssize_t romdisk_read(file_t fd, void *buf, size_t bytes) {
+static ssize_t romdisk_read(void * h, void *buf, size_t bytes) {
+	file_t fd = (file_t)h;
+
 	/* Check that the fd is valid */
-	if (fd >= MAX_RD_FILES || fh[fd].index == 0 || fh[fd].dir)
+	if (fd >= MAX_RD_FILES || fh[fd].index == 0 || fh[fd].dir) {
+		errno = EINVAL;
 		return -1;
+	}
 
 	/* Is there enough left? */
 	if ((fh[fd].ptr + bytes) > fh[fd].size)
@@ -245,10 +258,14 @@ static ssize_t romdisk_read(file_t fd, void *buf, size_t bytes) {
 }
 
 /* Seek elsewhere in a file */
-static off_t romdisk_seek(file_t fd, off_t offset, int whence) {
+static off_t romdisk_seek(void * h, off_t offset, int whence) {
+	file_t fd = (file_t)h;
+
 	/* Check that the fd is valid */
-	if (fd>=MAX_RD_FILES || fh[fd].index==0 || fh[fd].dir)
+	if (fd>=MAX_RD_FILES || fh[fd].index==0 || fh[fd].dir) {
+		errno = EINVAL;
 		return -1;
+	}
 
 	/* Update current position according to arguments */
 	switch (whence) {
@@ -273,31 +290,39 @@ static off_t romdisk_seek(file_t fd, off_t offset, int whence) {
 }
 
 /* Tell where in the file we are */
-static off_t romdisk_tell(file_t fd) {
-	if (fd>=MAX_RD_FILES || fh[fd].index==0 || fh[fd].dir)
+static off_t romdisk_tell(void * h) {
+	file_t fd = (file_t)h;
+
+	if (fd>=MAX_RD_FILES || fh[fd].index==0 || fh[fd].dir) {
+		errno = EINVAL;
 		return -1;
+	}
 
 	return fh[fd].ptr;
 }
 
 /* Tell how big the file is */
-static size_t romdisk_total(file_t fd) {
-	if (fd>=MAX_RD_FILES || fh[fd].index==0 || fh[fd].dir)
+static size_t romdisk_total(void * h) {
+	file_t fd = (file_t)h;
+
+	if (fd>=MAX_RD_FILES || fh[fd].index==0 || fh[fd].dir) {
+		errno = EINVAL;
 		return -1;
+	}
 
 	return fh[fd].size;
 }
 
 /* Read a directory entry */
-static dirent_t *romdisk_readdir(file_t fd) {
+static dirent_t *romdisk_readdir(void * h) {
 	romdisk_file_t	*fhdr;
 	int		type;
+	file_t		fd = (file_t)h;
 	
-	if (fd>=MAX_RD_FILES || fh[fd].index==0 || !fh[fd].dir)
+	if (fd>=MAX_RD_FILES || fh[fd].index==0 || !fh[fd].dir) {
+		errno = EINVAL;
 		return NULL;
-
-	if (fh[fd].index == 0)
-		return NULL;
+	}
 
 	/* Get the current file header */
 	fhdr = (romdisk_file_t *)(fh[fd].mnt->image + fh[fd].index + fh[fd].ptr);
@@ -325,9 +350,13 @@ static dirent_t *romdisk_readdir(file_t fd) {
 	return &fh[fd].dirent;
 }
 
-static void *romdisk_mmap(file_t fd) {
-	if (fd>=MAX_RD_FILES || fh[fd].index==0)
+static void *romdisk_mmap(void * h) {
+	file_t fd = (file_t)h;
+
+	if (fd>=MAX_RD_FILES || fh[fd].index==0) {
+		errno = EINVAL;
 		return NULL;
+	}
 
 	/* Can't really help the loss of "const" here */
 	return (void *)(fh[fd].mnt->image + fh[fd].index);
@@ -335,9 +364,17 @@ static void *romdisk_mmap(file_t fd) {
 
 /* This is a template that will be used for each mount */
 static vfs_handler_t vh = {
-	{ 0 },			/* name */
-	0, 0, NULL,		/* In-kernel, no cacheing, privdata */
-	VFS_LIST_INIT,		/* List */
+	/* Name Handler */
+	{
+		{ 0 },			/* name */
+		0,			/* in-kernel */
+		0x00010000,		/* Version 1.0 */
+		NMMGR_FLAGS_NEEDSFREE,	/* We malloc each VFS struct */
+		NMMGR_TYPE_VFS,		/* VFS handler */
+		NMMGR_LIST_INIT		/* list */
+	},
+
+	0, NULL,		/* no cacheing, privdata */
 	
 	romdisk_open,
 	romdisk_close,
@@ -391,13 +428,14 @@ int fs_romdisk_shutdown() {
 		n = LIST_NEXT(c, list_ent);
 
 		dbglog(DBG_DEBUG, "fs_romdisk: unmounting image at %p from %s\n",
-			c->image, c->vfsh->prefix);
+			c->image, c->vfsh->nmmgr.pathname);
 		if (c->own_buffer)
 			dbglog(DBG_DEBUG, "   (and also freeing its image buffer)\n");
 
-		fs_handler_remove(c->vfsh);
+		assert( &c->vfsh->nmmgr == c->vfsh );
 		if (c->own_buffer)
 			free((void *)c->image);
+		nmmgr_handler_remove(&c->vfsh->nmmgr);
 		free(c->vfsh);
 		free(c);
 		
@@ -448,23 +486,31 @@ int fs_romdisk_mount(const char * mountpoint, const uint8 *img, int own_buffer) 
 	/* Make a VFS struct */
 	vfsh = (vfs_handler_t *)malloc(sizeof(vfs_handler_t));
 	memcpy(vfsh, &vh, sizeof(vfs_handler_t));
+	strcpy(vfsh->nmmgr.pathname, mountpoint);
 	vfsh->privdata = (void *)mnt;
 	mnt->vfsh = vfsh;
 
+	assert( &mnt->vfsh->nmmgr == mnt->vfsh );
+
 	/* Add it to our mount list */
+	mutex_lock(fh_mutex);
 	LIST_INSERT_HEAD(&romdisks, mnt, list_ent);
+	mutex_unlock(fh_mutex);
 
 	/* Register with VFS */
-	return fs_handler_add(mountpoint, vfsh);
+	return nmmgr_handler_add(&vfsh->nmmgr);
 }
 
 /* Unmount a romdisk image */
 int fs_romdisk_unmount(const char * mountpoint) {
 	rd_image_t	* n;
 	int		found = 0;
+	int		rv = 0;
+
+	mutex_lock(fh_mutex);
 
 	LIST_FOREACH(n, &romdisks, list_ent) {
-		if (!strcmp(mountpoint, n->vfsh->prefix)) {
+		if (!strcmp(mountpoint, n->vfsh->nmmgr.pathname)) {
 			found = 1;
 			break;
 		}
@@ -475,12 +521,13 @@ int fs_romdisk_unmount(const char * mountpoint) {
 		LIST_REMOVE(n, list_ent);
 
 		dbglog(DBG_DEBUG, "fs_romdisk: unmounting image at %p from %s\n",
-			n->image, n->vfsh->prefix);
+			n->image, n->vfsh->nmmgr.pathname);
 		if (n->own_buffer)
 			dbglog(DBG_DEBUG, "   (and also freeing its image buffer)\n");
 
 		/* Unmount it */
-		fs_handler_remove(n->vfsh);
+		assert( &n->vfsh->nmmgr == n->vfsh );
+		nmmgr_handler_remove(&n->vfsh->nmmgr);
 
 		/* If we own the buffer, free it */
 		if (n->own_buffer)
@@ -489,9 +536,11 @@ int fs_romdisk_unmount(const char * mountpoint) {
 		/* Free the structs */
 		free(n->vfsh);
 		free(n);
+	} else {
+		errno = ENOENT;
+		rv = -1;
+	}
 
-		return 0;
-	} else
-		return -1;
+	mutex_unlock(fh_mutex);
+	return rv;
 }
-

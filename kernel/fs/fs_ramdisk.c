@@ -1,7 +1,7 @@
 /* KallistiOS ##version##
 
    fs_ramdisk.c
-   (c)2002 Dan Potter
+   Copyright (C)2002,2003 Dan Potter
 
 */
 
@@ -36,9 +36,10 @@ cache data from disk rather than as a general purpose file system.
 #include <malloc.h>
 #include <string.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <assert.h>
 
-CVSID("$Id: fs_ramdisk.c,v 1.5 2003/04/24 03:00:02 bardtx Exp $");
+CVSID("$Id: fs_ramdisk.c,v 1.4 2003/07/15 07:55:02 bardtx Exp $");
 
 /* File definition */
 typedef struct rd_file {
@@ -207,10 +208,13 @@ static rd_file_t * ramdisk_create_file(rd_dir_t * parent, const char * fn, int d
 }
 
 /* Open a file or directory */
-static file_t ramdisk_open(vfs_handler_t * vfs, const char *fn, int mode) {
+static void * ramdisk_open(vfs_handler_t * vfs, const char *fn, int mode) {
 	file_t		fd = -1;
 	rd_file_t	*f;
 	int		mm = mode & O_MODE_MASK;
+
+	if (!strcmp(fn, "/"))
+		fn++;
 
 	mutex_lock(rd_mutex);
 
@@ -235,6 +239,10 @@ static file_t ramdisk_open(vfs_handler_t * vfs, const char *fn, int mode) {
 				goto error_out;
 		}
 	}
+
+	/* Check for more stupid things */
+	if (f->type == STAT_TYPE_DIR && (!(mode & O_DIR) || mm != O_RDONLY))
+		goto error_out;
 
 	/* Find a free file handle */
 	for (fd=1; fd<MAX_RAM_FILES; fd++)
@@ -296,18 +304,19 @@ static file_t ramdisk_open(vfs_handler_t * vfs, const char *fn, int mode) {
 
 	/* Should do it... */
 	mutex_unlock(rd_mutex);
-	return fd;
+	return (void *)fd;
 	
 error_out:
 	if (fd != -1)
 		fh[fd].file = NULL;
 	mutex_unlock(rd_mutex);
-	return FILEHND_INVALID;
+	return NULL;
 }
 
 /* Close a file or directory */
-static void ramdisk_close(file_t fd) {
+static void ramdisk_close(void * h) {
 	rd_file_t	*f;
+	file_t		fd = (file_t)h;
 
 	mutex_lock(rd_mutex);
 	
@@ -330,8 +339,9 @@ static void ramdisk_close(file_t fd) {
 }
 
 /* Read from a file */
-static ssize_t ramdisk_read(file_t fd, void *buf, size_t bytes) {
+static ssize_t ramdisk_read(void * h, void *buf, size_t bytes) {
 	ssize_t rv = -1;
+	file_t	fd = (file_t)h;
 	
 	mutex_lock(rd_mutex);
 	
@@ -353,8 +363,9 @@ static ssize_t ramdisk_read(file_t fd, void *buf, size_t bytes) {
 }
 
 /* Write to a file */
-static ssize_t ramdisk_write(file_t fd, const void *buf, size_t bytes) {
+static ssize_t ramdisk_write(void * h, const void *buf, size_t bytes) {
 	ssize_t rv = -1;
+	file_t	fd = (file_t)h;
 	
 	mutex_lock(rd_mutex);
 	
@@ -388,8 +399,9 @@ error_out:
 }
 
 /* Seek elsewhere in a file */
-static off_t ramdisk_seek(file_t fd, off_t offset, int whence) {
-	off_t rv = -1;
+static off_t ramdisk_seek(void * h, off_t offset, int whence) {
+	off_t	rv = -1;
+	file_t	fd = (file_t)h;
 
 	mutex_lock(rd_mutex);
 	
@@ -422,8 +434,9 @@ static off_t ramdisk_seek(file_t fd, off_t offset, int whence) {
 }
 
 /* Tell where in the file we are */
-static off_t ramdisk_tell(file_t fd) {
-	off_t rv = -1;
+static off_t ramdisk_tell(void * h) {
+	off_t	rv = -1;
+	file_t	fd = (file_t)h;
 
 	mutex_lock(rd_mutex);
 
@@ -435,8 +448,9 @@ static off_t ramdisk_tell(file_t fd) {
 }
 
 /* Tell how big the file is */
-static size_t ramdisk_total(file_t fd) {
-	off_t rv = -1;
+static size_t ramdisk_total(void * h) {
+	off_t	rv = -1;
+	file_t	fd = (file_t)h;
 
 	mutex_lock(rd_mutex);
 
@@ -448,12 +462,13 @@ static size_t ramdisk_total(file_t fd) {
 }
 
 /* Read a directory entry */
-static dirent_t *ramdisk_readdir(file_t fd) {
+static dirent_t *ramdisk_readdir(void * h) {
 	rd_file_t	* f;
 	dirent_t	* rv = NULL;
+	file_t		fd = (file_t)h;
 
 	mutex_lock(rd_mutex);
-	
+
 	if (fd < MAX_RAM_FILES && fh[fd].file != NULL && fh[fd].ptr != 0 && fh[fd].dir) {
 		/* Find the current file and advance to the next */
 		f = (rd_file_t *)fh[fd].ptr;
@@ -506,8 +521,9 @@ static int ramdisk_unlink(vfs_handler_t * vfs, const char *fn) {
 	return rv;
 }
 
-static void * ramdisk_mmap(file_t fd) {
-	void * rv = NULL;
+static void * ramdisk_mmap(void * h) {
+	void	* rv = NULL;
+	file_t	fd = (file_t)h;
 	
 	mutex_lock(rd_mutex);
 	
@@ -522,9 +538,17 @@ static void * ramdisk_mmap(file_t fd) {
 
 /* Put everything together */
 static vfs_handler_t vh = {
-	{ "ramdisk" },		/* name */
-	0, 0, NULL,		/* In-kernel, no cacheing, privdata */
-	VFS_LIST_INIT,		/* List */
+	/* Name handler */
+	{
+		"/ram",			/* name */
+		0,			/* tbfi */
+		0x00010000,		/* Version 1.0 */
+		0,			/* flags */
+		NMMGR_TYPE_VFS,		/* VFS handler */
+		NMMGR_LIST_INIT
+	},
+
+	0, NULL,		/* no cacheing, privdata */
 
 	ramdisk_open,
 	ramdisk_close,
@@ -548,17 +572,17 @@ static vfs_handler_t vh = {
    writing, but it doesn't actually attach the file to an fd, and it starts
    out with data instead of being blank. */
 int fs_ramdisk_attach(const char * fn, void * obj, size_t size) {
-	file_t		fd;
+	void 		*fd;
 	rd_file_t	*f;
 	
 	/* First of all, open a file for writing. This'll save us a bunch
 	   of duplicated code. */
 	fd = ramdisk_open(&vh, fn, O_WRONLY | O_TRUNC);
-	if (fd == FILEHND_INVALID)
+	if (fd == NULL)
 		return -1;
 
 	/* Ditch the data block we had and replace it with the user one. */
-	f = fh[fd].file;
+	f = fh[(int)fd].file;
 	free(f->data);
 	f->data = obj;
 	f->datasize = size;
@@ -572,20 +596,20 @@ int fs_ramdisk_attach(const char * fn, void * obj, size_t size) {
 
 /* Does the opposite of attach. This again piggybacks on open. */
 int fs_ramdisk_detach(const char * fn, void ** obj, size_t * size) {
-	file_t		fd;
+	void		*fd;
 	rd_file_t	*f;
 	
 	/* First of all, open a file for reading. This'll save us a bunch
 	   of duplicated code. */
 	fd = ramdisk_open(&vh, fn, O_RDONLY);
-	if (fd == FILEHND_INVALID)
+	if (fd == NULL)
 		return -1;
 
 	/* Pull the data block and put it in the user parameters. */
 	assert( obj != NULL );
 	assert( size != NULL );
 
-	f = fh[fd].file;
+	f = fh[(int)fd].file;
 	*obj = f->data;
 	*size = f->size;
 
@@ -609,7 +633,7 @@ int fs_ramdisk_init() {
 	rootdir = (rd_dir_t *)malloc(sizeof(rd_dir_t));
 	LIST_INIT(rootdir);
 	root = (rd_file_t *)malloc(sizeof(rd_file_t));
-	root->name = "/";
+	root->name = strdup("/");
 	root->size = 0;
 	root->type = STAT_TYPE_DIR;
 	root->openfor = OPENFOR_NOTHING;
@@ -624,7 +648,7 @@ int fs_ramdisk_init() {
 	rd_mutex = mutex_create();
 
 	/* Register with VFS */
-	return fs_handler_add("/ram", &vh);
+	return nmmgr_handler_add(&vh.nmmgr);
 }
 
 /* De-init the file system */
@@ -645,8 +669,5 @@ int fs_ramdisk_shutdown() {
 	free(root);
 	   
 	mutex_destroy(rd_mutex);
-	return fs_handler_remove(&vh);
+	return nmmgr_handler_remove(&vh.nmmgr);
 }
-
-
-
