@@ -19,7 +19,7 @@ ifndef KOS_LIBS
 	KOS_LDFLAGS := $(KOS_LDFLAGS) -L$(KOS_BASE)/lib
 endif
 
-KOS_LDFLAGS := $(KOS_LDFLAGS) -L$(KOS_ADDONS_BASE)/lib
+KOS_LDFLAGS := $(KOS_LDFLAGS) -L$(KOS_ADDONS_BASE)/lib/$(KOS_ARCH)
 
 # Build rules
 %.o: %.c
