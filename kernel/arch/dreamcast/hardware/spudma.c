@@ -56,7 +56,6 @@ typedef struct {
 } g2_dma_reg_t;
 
 /* DMA registers */
-static vuint32	* const asic_lmmode0 = (vuint32 *)0xa05f6884;
 static vuint32	* const shdma = (vuint32 *)0xffa00000;
 static volatile g2_dma_reg_t * const extdma = (g2_dma_reg_t *)0xa05f7800;
 const int	chn = 0;	/* 0 for SPU; 1, 2, 3 for EXT */
@@ -152,7 +151,6 @@ int spu_dma_transfer(void *from, uint32 dest, uint32 length, int block,
 	dma_cbdata = cbdata;
 
 	/* Start the DMA transfer */
-	*asic_lmmode0 = 0;
 	extdma->dma[chn].ctrl1 = 0;
 	extdma->dma[chn].ctrl2 = 0;
 	extdma->dma[chn].ext_addr = dest & 0x1fffffe0;
