@@ -46,7 +46,7 @@ static void pvr_dma_irq_hnd(uint32 code) {
 	if (shdma[DMAC_DMATCR2] != 0)
 		dbglog(DBG_INFO,"pvr_dma: The dma did not complete successfully\n");
 
-	DBG(("pvr_dma_irq_hnd\n"));
+	// DBG(("pvr_dma_irq_hnd\n"));
 
 	// Call the callback, if any.
 	if (dma_callback) {

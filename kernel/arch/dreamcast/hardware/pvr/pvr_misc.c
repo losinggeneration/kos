@@ -127,8 +127,8 @@ void pvr_sync_reg_buffer() {
 	buf = pvr_state.ta_buffers + pvr_state.ta_target;
 
 	/* Reset TA */
-	PVR_SET(PVR_RESET, PVR_RESET_TA);
-	PVR_SET(PVR_RESET, PVR_RESET_NONE);
+	//PVR_SET(PVR_RESET, PVR_RESET_TA);
+	//PVR_SET(PVR_RESET, PVR_RESET_NONE);
 
 	/* Set buffer pointers */
 	PVR_SET(PVR_TA_OPB_START,	buf->opb);
@@ -179,8 +179,8 @@ void pvr_begin_queued_render() {
 	vrl[0x11] = 0;
 
 	/* Reset the ISP/TSP, just in case */
-	PVR_SET(PVR_RESET, PVR_RESET_ISPTSP);
-	PVR_SET(PVR_RESET, PVR_RESET_NONE);
+	//PVR_SET(PVR_RESET, PVR_RESET_ISPTSP);
+	//PVR_SET(PVR_RESET, PVR_RESET_NONE);
 
 	/* Finish up rendering the current frame (into the other buffer) */
 	PVR_SET(PVR_ISP_TILEMAT_ADDR, tbuf->tile_matrix);

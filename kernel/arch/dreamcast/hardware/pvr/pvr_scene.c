@@ -97,7 +97,7 @@ void pvr_scene_begin() {
 			pvr_state.dma_buffers[pvr_state.ram_target].ptr[i] = 0;
 		}
 		pvr_sync_stats(PVR_SYNC_BUFSTART);
-		DBG(("pvr_scene_begin(dma -> %d)\n", pvr_state.ram_target));
+		// DBG(("pvr_scene_begin(dma -> %d)\n", pvr_state.ram_target));
 	} else {
 		// Get general stuff ready.
 		pvr_state.list_reg_open = -1;
@@ -230,16 +230,16 @@ int pvr_scene_finish() {
 
 	// If we're in DMA mode, then this works a little differently...
 	if (pvr_state.dma_mode) {
-		DBG(("pvr_scene_finish(dma -> %d)\n", pvr_state.ram_target));
+		// DBG(("pvr_scene_finish(dma -> %d)\n", pvr_state.ram_target));
 		// If any enabled lists are empty, fill them with a blank polyhdr. Also
 		// add a zero-marker to the end of each list.
+		b = pvr_state.dma_buffers + pvr_state.ram_target;
 		for (i=0; i<PVR_OPB_COUNT; i++) {
 			// Not enabled -> skip
 			if (!(pvr_state.lists_enabled & (1 << i)))
 				continue;
 
 			// Make sure there's at least one primitive in each.
-			b = pvr_state.dma_buffers + pvr_state.ram_target;
 			if (b->ptr[i] == 0) {
 				pvr_blank_polyhdr_buf(i, (pvr_poly_hdr_t*)(b->base[i]));
 				b->ptr[i] += 32;
