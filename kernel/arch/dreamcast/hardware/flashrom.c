@@ -107,10 +107,7 @@ static int flashrom_calc_crc(uint8 * buffer) {
 }
 
 
-/* Internal function returns a numbered logical block from the requested
-   partition. The newest data is returned. 'buffer_out' must have enough
-   room for 60 bytes of data. */
-static int flashrom_get_block(int partid, int blockid, uint8 * buffer_out) {
+int flashrom_get_block(int partid, int blockid, uint8 * buffer_out) {
 	int	start, size;
 	int	bmcnt;
 	char	magic[18];
@@ -211,7 +208,7 @@ ex:
 /* This internal function returns the system config block. As far as I
    can determine, this is always partition 2, logical block 5. */
 static int flashrom_load_syscfg(uint8 * buffer) {
-	return flashrom_get_block(FLASHROM_PT_BLOCK_1, 5, buffer);
+	return flashrom_get_block(FLASHROM_PT_BLOCK_1, FLASHROM_B1_SYSCFG, buffer);
 }
 
 /* Structure of the system config block (as much as we know anyway). */
@@ -270,3 +267,177 @@ int flashrom_get_region() {
 	}
 }
 
+/* Structure of the ISP config blocks (as much as we know anyway). 
+   Thanks to Sam Steele for this info. */
+typedef struct {
+	union {
+		struct {
+			// Block 0xE0
+			uint16	blockid;	// Should be 0xE0
+			uint8	prodname[4];	// SEGA
+			uint8	unk1;		// 0x13
+			uint8	method;
+			uint8	unk2[2];	// 0x00 0x00
+			uint8	ip[4];		// These are all in big-endian notation
+			uint8	nm[4];
+			uint8	bc[4];
+			uint8	dns1[4];
+			uint8	dns2[4];
+			uint8	gw[4];
+			uint8	unk3[4];	// All zeros
+			char	hostname[24];	// Host name
+			uint16	crc;
+		} e0;
+
+		struct {
+			// Block E2
+			uint16	blockid;	// Should be 0xE2
+			uint8	unk[12];
+			char	email[48];
+			uint16	crc;
+		} e2;
+
+		struct {
+			// Block E4
+			uint16	blockid;	// Should be 0xE4
+			uint8	unk[32];
+			char	smtp[28];
+			uint16	crc;
+		} e4;
+
+		struct {
+			// Block E5
+			uint16	blockid;	// Should be 0xE5
+			uint8	unk[36];
+			char	pop3[24];
+			uint16	crc;
+		} e5;
+
+		struct {
+			// Block E6
+			uint16	blockid;	// Should be 0xE6
+			uint8	unk[40];
+			char	pop3_login[20];
+			uint16	crc;
+		} e6;
+
+		struct {
+			// Block E7
+			uint16	blockid;	// Should be 0xE7
+			uint8	unk[12];
+			char	pop3_passwd[32];
+			char	proxy_host[16];
+			uint16	crc;
+		} e7;
+
+		struct {
+			// Block E8
+			uint16	blockid;	// Should be 0xE8
+			uint8	unk1[48];
+			uint16	proxy_port;
+			uint16	unk2;
+			char	ppp_login[8];
+			uint16	crc;
+		} e8;
+
+		struct {
+			// Block E9
+			uint16	blockid;	// Should be 0xE9
+			uint8	unk[40];
+			char	ppp_passwd[20];
+			uint16	crc;
+		} e9;
+	};
+} isp_settings_t;
+
+int flashrom_get_ispcfg(flashrom_ispcfg_t * out) {
+	uint8		buffer[64];
+	isp_settings_t	* isp = (isp_settings_t *)buffer;
+	int		found = 0;
+
+	// Clean out the output config buffer.
+	memset(out, 0, sizeof(flashrom_ispcfg_t));
+
+	// Get the E0 config block
+	if (flashrom_get_block(FLASHROM_PT_BLOCK_1, FLASHROM_B1_IP_SETTINGS, buffer) >= 0) {
+		// Fill in values from it
+		out->method = isp->e0.method;
+		memcpy(out->ip, isp->e0.ip, 4);
+		memcpy(out->nm, isp->e0.nm, 4);
+		memcpy(out->bc, isp->e0.bc, 4);
+		memcpy(out->gw, isp->e0.gw, 4);
+		memcpy(out->dns[0], isp->e0.dns1, 4);
+		memcpy(out->dns[1], isp->e0.dns2, 4);
+		memcpy(out->hostname, isp->e0.hostname, 24);
+
+		out->ip_valid = 1;
+		found++;
+	}
+
+	// Get the email config block
+	if (flashrom_get_block(FLASHROM_PT_BLOCK_1, FLASHROM_B1_EMAIL, buffer) >= 0) {
+		// Fill in the values from it
+		memcpy(out->email, isp->e2.email, 48);
+
+		out->email_valid = 1;
+		found++;
+	}
+
+	// Get the smtp config block
+	if (flashrom_get_block(FLASHROM_PT_BLOCK_1, FLASHROM_B1_SMTP, buffer) >= 0) {
+		// Fill in the values from it
+		memcpy(out->smtp, isp->e4.smtp, 28);
+
+		out->smtp_valid = 1;
+		found++;
+	}
+
+	// Get the pop3 config block
+	if (flashrom_get_block(FLASHROM_PT_BLOCK_1, FLASHROM_B1_POP3, buffer) >= 0) {
+		// Fill in the values from it
+		memcpy(out->pop3, isp->e5.pop3, 24);
+
+		out->pop3_valid = 1;
+		found++;
+	}
+
+	// Get the pop3 login config block
+	if (flashrom_get_block(FLASHROM_PT_BLOCK_1, FLASHROM_B1_POP3LOGIN, buffer) >= 0) {
+		// Fill in the values from it
+		memcpy(out->pop3_login, isp->e6.pop3_login, 20);
+
+		out->pop3_login_valid = 1;
+		found++;
+	}
+
+	// Get the pop3 passwd config block
+	if (flashrom_get_block(FLASHROM_PT_BLOCK_1, FLASHROM_B1_POP3PASSWD, buffer) >= 0) {
+		// Fill in the values from it
+		memcpy(out->pop3_passwd, isp->e7.pop3_passwd, 32);
+		memcpy(out->proxy_host, isp->e7.proxy_host, 16);
+
+		out->pop3_passwd_valid = 1;
+		found++;
+	}
+
+	// Get the PPP login config block
+	if (flashrom_get_block(FLASHROM_PT_BLOCK_1, FLASHROM_B1_PPPLOGIN, buffer) >= 0) {
+		// Fill in the values from it
+		out->proxy_port = isp->e8.proxy_port;
+		memcpy(out->ppp_login, isp->e8.ppp_login, 8);
+
+		out->ppp_login_valid = 1;
+		found++;
+	}
+
+	// Get the PPP passwd config block
+	if (flashrom_get_block(FLASHROM_PT_BLOCK_1, FLASHROM_B1_PPPPASSWD, buffer) >= 0) {
+		// Fill in the values from it
+		memcpy(out->ppp_passwd, isp->e9.ppp_passwd, 20);
+
+		out->ppp_passwd_valid = 1;
+		found++;
+	}
+
+	return found > 0 ? 0 : -1;
+}

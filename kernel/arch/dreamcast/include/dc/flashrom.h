@@ -35,6 +35,18 @@ __BEGIN_DECLS
 #define FLASHROM_PT_BLOCK_2	4	//< Block allocated (64K)
 
 /**
+  An enumeration of logical blocks available in the flashrom. */
+#define FLASHROM_B1_SYSCFG	0x05	//< System config (BLOCK_1)
+#define FLASHROM_B1_IP_SETTINGS	0xE0	//< IP settings for BBA (BLOCK_1)
+#define FLASHROM_B1_EMAIL	0xE2	//< Email address (BLOCK_1)
+#define FLASHROM_B1_SMTP	0xE4	//< SMTP server setting (BLOCK_1)
+#define FLASHROM_B1_POP3	0xE5	//< POP3 server setting (BLOCK_1)
+#define FLASHROM_B1_POP3LOGIN	0xE6	//< POP3 login setting (BLOCK_1)
+#define FLASHROM_B1_POP3PASSWD	0xE7	//< POP3 password setting + proxy (BLOCK_1)
+#define FLASHROM_B1_PPPLOGIN	0xE8	//< PPP username + proxy (BLOCK_1)
+#define FLASHROM_B1_PPPPASSWD	0xE9	//< PPP passwd (BLOCK_1)
+
+/**
   Implements the FLASHROM_INFO syscall; given a partition ID,
   return two ints specifying the beginning and the size of
   the partition (respectively) inside the flashrom. Returns zero
@@ -64,6 +76,13 @@ int flashrom_write(int offset, void * buffer, int bytes);
   will be reset to FFs. Returns zero if successful, -1 on failure. */
 int flashrom_delete(int offset);
 
+
+/* Medium-level functions */
+/**
+  Returns a numbered logical block from the requested partition. The newest
+  data is returned. 'buffer_out' must have enough room for 60 bytes of
+  data. */
+int flashrom_get_block(int partid, int blockid, uint8 * buffer_out);
 
 
 /* Higher level functions */
@@ -106,6 +125,57 @@ int flashrom_get_syscfg(flashrom_syscfg_t * out);
   one of the codes above or -1 on error. */
 int flashrom_get_region();
 
+/**
+  Method constants for the ispcfg struct */
+#define FLASHROM_ISP_DHCP	0
+#define FLASHROM_ISP_STATIC	1
+#define FLASHROM_ISP_DIALUP	2
+#define FLASHROM_ISP_PPPOE	3
+
+/**
+  This struct will be filled by calling flashrom_get_isp_settings below.
+  Thanks to Sam Steele for this info. */
+typedef struct flashrom_ispcfg {
+	int	ip_valid;	//< >0 if the IP settings are valid
+	int	method;		//< DHCP, Static, dialup(?), PPPoE
+	uint8	ip[4];		//< Host IP address
+	uint8	nm[4];		//< Netmask
+	uint8	bc[4];		//< Broadcast address
+	uint8	gw[4];		//< Gateway address
+	uint8	dns[2][4];	//< DNS servers (2)
+	char	hostname[24];	//< DHCP/Host name
+
+	int	email_valid;	//< >0 if the email setting is valid
+	char	email[48];	//< Email address
+
+	int	smtp_valid;	//< >0 if the smtp setting is valid
+	char	smtp[28];	//< SMTP server
+
+	int	pop3_valid;	//< >0 if the pop3 setting is valid
+	char	pop3[24];	//< POP3 server
+
+	int	pop3_login_valid;	//< >0 if the login setting is valid
+	char	pop3_login[20];		//< POP3 login
+
+	int	pop3_passwd_valid;	//< >0 if the passwd/proxy setting is valid
+	char	pop3_passwd[32];	//< POP3 passwd
+	char	proxy_host[16];		//< Proxy server hostname
+
+	int	ppp_login_valid;	//< >0 if the PPP login/proxy setting is valid
+	int	proxy_port;		//< Proxy server port
+	char	ppp_login[8];		//< PPP login
+
+	int	ppp_passwd_valid;	//< >0 if the PPP passwd setting is valid
+	char	ppp_passwd[20];		//< PPP password
+} flashrom_ispcfg_t;
+
+/**
+  Retrieves the console's ISP settings, if they exist. These are set by
+  programs like Dream Passport 3. Returns -1 on error (none of the settings
+  can be found, or some other error), or >=0 on success. You should check
+  the _valid member of the matching part of the struct before relying on
+  the data. */
+int flashrom_get_ispcfg(flashrom_ispcfg_t * out);
 
 /* More to come later */
 
