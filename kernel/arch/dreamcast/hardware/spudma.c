@@ -1,16 +1,14 @@
 /* KallistiOS ##version##
   
    spudma.c
-   (c)2001-2002 Dan Potter
+   Copyright (C)2001,2002,2004 Dan Potter
  */
 
 #include <assert.h>
 #include <stdio.h>
+#include <errno.h>
 #include <dc/spu.h>
-/* #include <dc/g2.h> */
-#include <arch/irq.h>
-#include <arch/cache.h>
-#include <kos/thread.h>
+#include <dc/asic.h>
 #include <kos/sem.h>
 
 CVSID("$Id: spudma.c,v 1.4 2002/02/10 02:30:10 bardtx Exp $");
@@ -19,27 +17,16 @@ CVSID("$Id: spudma.c,v 1.4 2002/02/10 02:30:10 bardtx Exp $");
 
 Handles the DMA part of the SPU functionality.
 
-This module works in two different ways, depending on whether you have
-threads enabled or not.
+Thanks to Bitmaster for the info on SPU DMA, and Roger Cattermole who
+got a well-functioning PVR DMA module (helped this a bit).
 
-In thread enabled mode, memload will use a semaphore to block itself
-until the SPU DMA IRQ is triggered, assuming you ask for it to wait
-until the DMA is completed. This is very CPU efficient since the SPU
-thread gets scheduled off until the IRQ happens.
+XXX: Right now this conflicts with PVR DMA but we ought to be able
+to fix that by going to another channel.
 
-In thread disabled mode, memload just spins until the IRQ fires, assuming
-you ask for it to wait.
-
-In both cases, if you ask for it not to wait, the function will return
-immidiately. You'll have to do your own cleanup.
-
-This is still pretty kludgy but it works.
-
-Thanks to Bitmaster for the info on SPU DMA.
+XXX: This ought to be abstracted out to allow usage with the parallel
+port as well.
 
 */
-
-#if 0
 
 typedef struct {
 	uint32		ext_addr;		/* External address (SPU-RAM or parallel port) */
@@ -69,90 +56,103 @@ typedef struct {
 } g2_dma_reg_t;
 
 /* DMA registers */
-vuint32	* const xxy = (vuint32 *)0xa05f6884;
-vuint32	* const qacr = (vuint32 *)0xff000038;
-vuint32	* const shdma = (vuint32 *)0xffa00000;
-volatile g2_dma_reg_t * const extdma = (g2_dma_reg_t *)0xa05f7800;
+static vuint32	* const asic_lmmode0 = (vuint32 *)0xa05f6884;
+static vuint32	* const shdma = (vuint32 *)0xffa00000;
+static volatile g2_dma_reg_t * const extdma = (g2_dma_reg_t *)0xa05f7800;
 const int	chn = 0;	/* 0 for SPU; 1, 2, 3 for EXT */
+
+/* DMAC registers. We use channel 3 here to avoid conflicts with the PVR. */
+#define DMAC_SAR3	0x30/4
+#define DMAC_DAR3	0x34/4
+#define DMAC_DMATCR3	0x38/4
+#define DMAC_CHCR3	0x3c/4
+#define DMAC_DMAOR	0x40/4
 
 /* Signaling semaphore */
 static semaphore_t * dma_done;
-static volatile int dma_done_int;
+static int dma_blocking;   
+static spu_dma_callback_t dma_callback;
+static ptr_t dma_cbdata;
 
 static void dma_disable() {
 	/* Disable the DMA */
 	extdma->dma[chn].ctrl1 = 0;
 	extdma->dma[chn].ctrl2 = 0;
-	/* shdma[0x40/4] = 0; */	/* DMAC disable */
+	shdma[DMAC_CHCR3] &= ~1;
 }
 
 static void spu_dma_irq(uint32 code) {
+	if (shdma[DMAC_DMATCR3] != 0)
+		dbglog(DBG_INFO, "spu_dma: DMA did not complete successfully\n");
+
 	dma_disable();
 
-	/* Signal the SPU thread to continue */
-	if (thd_enabled)
+	// Call the callback, if any.
+	if (dma_callback) {
+		dma_callback(dma_cbdata);
+		dma_callback = NULL;
+		dma_cbdata = 0;
+	}
+
+	// Signal the calling thread to continue, if any.
+	if (dma_blocking) {
 		sem_signal(dma_done);
-	else
-		dma_done_int = 1;
-	g2_dma_unlock();
+		thd_schedule(1, 0);
+		dma_blocking = 0;
+	}
 }
-#endif
 
-void spu_memload_dma(uint32 dest, void *from, int length) {
-	assert_msg( 0, "SPU DMA is broken right now" );
+// XXX: Write (and check here) spu_dma_ready()
+int spu_dma_transfer(void *from, uint32 dest, uint32 length, int block,
+	spu_dma_callback_t callback, ptr_t cbdata)
+{
+	uint32 val;
 
-#if 0
 	/* Check alignments */
 	if ( ((uint32)from) & 31 ) {
-		dbglog(DBG_ERROR, "spudma: unaligned source DMA %08x\n", from);
-		return;
+		dbglog(DBG_ERROR, "spu_dma: unaligned source DMA %p\n", from);
+		errno = EFAULT;
+		return -1;
 	}
 	if ( ((uint32)dest) & 31 ) {
-		dbglog(DBG_ERROR, "spudma: unaligned dest DMA %08x\n", dest);
-		return;
+		dbglog(DBG_ERROR, "spu_dma: unaligned dest DMA %p\n", (void *)dest);
+		errno = EFAULT;
+		return -1;
 	}
-	if ( ((uint32)length) & 31 ) {
-		length = (length & ~31) + 32;
-	}
+	length = (length + 0x1f) & ~0x1f;
 
-	/* Adjust destination */
-	dest += 0xa0800000;
+	/* Adjust destination to SPU RAM */
+	dest += 0x00800000;
 
-	g2_dma_lock();
+	val = shdma[DMAC_CHCR3];
+
+	// DE bit set so we must clear it?
+	if (val & 1)
+		shdma[DMAC_CHCR3] = val | 1;
+	// TE bit set so we must clear it?
+	if (val & 2)
+		shdma[DMAC_CHCR3] = val | 2;
 
 	/* Setup the SH-4 channel */
-	shdma[0x20/4] = 0;		/* SAR2 = 0 */
-	shdma[0x24/4] = 0;		/* DAR2 = 0 */
-	shdma[0x28/4] = 0;		/* DMATCR2 = 0 */
-	shdma[0x2c/4] = 0x12c0;		/* CHCR2 = 0x12c0; 32-byte block transfer,
+	shdma[DMAC_SAR3] = 0;		/* SAR3 = 0 */
+	shdma[DMAC_DMATCR3] = 0;	/* DMATCR3 = 0 */
+	shdma[DMAC_CHCR3] = 0x12c1;	/* CHCR3 = 0x12c0; 32-byte block transfer,
 					   burst mode, external request, single address mode,
 					   source address incremented; */
-	/* The default is correct and screwing with this can
-	   interrupt other types of DMA (maple, etc) */
-	/* shdma[0x40/4] = 0x8201; */	/* DMAOR = 0x8201; DMAC master enable, CH2 > CH0 > CH1 > CH3,
-					   on-demand data transfer */
-	/* *xxy = 0;
 
-	qacr[0] = 0x10;
-	qacr[1] = 0x10; */
+	val = shdma[DMAC_DMAOR];
+	if ((val & 0x8007) != 0x8001) {
+		dbglog(DBG_ERROR, "spu_dma: failed DMAOR check\n");
+		errno = EIO;
+		return -1;
+	}
 
-	/* Reset SPU DMA channel */
-	/* for (i=chn; i<=chn; i++) {
-		extdma->dma[i].ctrl1 = 0;
-		extdma->dma[i].ext_addr = 0x009f0000;
-		extdma->dma[i].sh4_addr = 0x0cff0000;
-		extdma->dma[i].size = 0x20;
-		extdma->dma[i].dir = 0;
-		extdma->dma[i].mode = 5;
-		extdma->dma[i].ctrl1 = 0;
-		extdma->dma[i].ctrl2 = 0;
-	} */
-
-	/* Write back the cache */
-	// dcache_flush_range((uint32)from, length);
-	icache_flush_range((uint32)from, length);
+	dma_blocking = block;
+	dma_callback = callback;
+	dma_cbdata = cbdata;
 
 	/* Start the DMA transfer */
+	*asic_lmmode0 = 0;
 	extdma->dma[chn].ctrl1 = 0;
 	extdma->dma[chn].ctrl2 = 0;
 	extdma->dma[chn].ext_addr = dest & 0x1fffffe0;
@@ -164,55 +164,39 @@ void spu_memload_dma(uint32 dest, void *from, int length) {
 	extdma->dma[chn].ctrl2 = 1;
 
 	/* Wait for us to be signaled */
-	if (thd_enabled)
+	if (block)
 		sem_wait(dma_done);
-	else {
-		while (!dma_done_int)
-			;
-		dma_done_int = 0;
-	}
-#endif
+
+	return 0;
 }
 
 int spu_dma_init() {
-	assert_msg(0, "SPU DMA is broken right now");
-
-#if 0
 	/* Create an initially blocked semaphore */
-	if (thd_enabled)
-		dma_done = sem_create(0);
-	else
-		dma_done_int = 0;
+	dma_done = sem_create(0);
+	dma_blocking = 0;
+	dma_callback = NULL;
+	dma_cbdata = 0;
 
-	/* Hook the G2 interrupt */
-	g2evt_set_handler(G2EVT_SPU_DMA, spu_dma_irq);
+	// Hook the interrupt
+	asic_evt_set_handler(ASIC_EVT_SPU_DMA, spu_dma_irq);
+	asic_evt_enable(ASIC_EVT_PVR_DMA, ASIC_IRQ_DEFAULT);
 
 	/* Setup the DMA transfer on the external side */
 	extdma->wait_state = 27;
 	extdma->magic = 0x4659404f;
 
-	/* printf("\n** INIT VALUES **\n");
-	printf("%08x, %08x, %08x\n",
-		extdma->dma[chn].ctrl1,
-		extdma->dma[chn].ctrl2,
-		shdma[0x40/4]); */
-#endif
 	return 0;
 }
 
 void spu_dma_shutdown() {
-	assert_msg(0, "SPU DMA is broken right now");
-
-#if 0
-	/* Unhook the G2 interrupt */
-	g2evt_set_handler(G2EVT_SPU_DMA, NULL);
+	// Unhook the G2 interrupt
+	asic_evt_disable(ASIC_EVT_PVR_DMA, ASIC_IRQ_DEFAULT);
+	asic_evt_set_handler(ASIC_EVT_SPU_DMA, NULL);
 
 	/* Destroy the semaphore */
-	if (thd_enabled)
-		sem_destroy(dma_done);
+	sem_destroy(dma_done);
 
 	/* Turn off any remaining DMA */
 	dma_disable();
-#endif
 }
 

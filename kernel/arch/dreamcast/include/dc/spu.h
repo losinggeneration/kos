@@ -27,8 +27,12 @@ void spu_memset(uint32 to, uint32 what, int length);
 
 /* DMA copy from SH-4 RAM to SPU RAM; length must be a multiple of 32,
    and the source and destination addresses must be aligned on 32-byte
-   boundaries. */
-void spu_memload_dma(uint32 dest, void *from, int length);
+   boundaries. If block is non-zero, this function won't return until
+   the transfer is complete. If callback is non-NULL, it will be called
+   upon completion (in an interrupt context!). Returns <0 on error. */
+typedef void (*spu_dma_callback_t)(ptr_t data);
+int spu_dma_transfer(void * from, uint32 dest, uint32 length, int block,
+	spu_dma_callback_t callback, ptr_t cbdata);
 
 /* Enable/disable the SPU; note that disable implies reset of the
    ARM CPU core. */

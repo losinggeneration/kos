@@ -33,6 +33,7 @@ int hardware_sys_init() {
 int hardware_periph_init() {
 	/* Init sound */
 	spu_init();
+	spu_dma_init();
 
 	/* Init CD-ROM.. NOTE: NO GD-ROM SUPPORT. ONLY CDs/CDRs. */
 	cdrom_init();
@@ -59,6 +60,7 @@ void hardware_shutdown() {
 		bba_shutdown();
 		maple_shutdown();
 		cdrom_shutdown();
+		spu_dma_shutdown();
 		spu_shutdown();
 		vid_shutdown();
 		/* fallthru */
