@@ -75,7 +75,7 @@ static const char rcsid[] =
 #endif
 #define fprintf(a, fmt, args...) conio_printf(fmt, ## args)
 #define printf(fmt, args...) conio_printf(fmt, ## args)
-#define fgets(buf, len, a) ({ conio_input_getline(1, buf, len); 1; })
+#define fgets(buf, len, a) ({ conio_input_getline(-1, buf, len); 1; })
 #define fflush(a) blagh()
 void blagh() { }
 

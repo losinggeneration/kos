@@ -15,7 +15,7 @@ int getchar() {
 	int rv;
 	
 	if (!have_buffer) {
-		conio_input_getline(1, buffer, 256);
+		conio_input_getline(-1, buffer, 256);
 		bufptr = 0;
 		strcat(buffer, "\n");
 		buflen = strlen(buffer);

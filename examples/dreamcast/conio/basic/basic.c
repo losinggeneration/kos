@@ -27,7 +27,7 @@ int main(int argc, char **argv) {
 
 	for ( ; ; ) {
 		conio_printf("> ");
-		conio_input_getline(1, buffer, 256);
+		conio_input_getline(-1, buffer, 256);
 		conio_printf("User entered: '%s'\n", buffer);
 		if (!strcmp(buffer, "exit"))
 			break;

@@ -15,7 +15,7 @@ void input_oneloop() {
 
 	/* Wait for a line of input */
 	conio_printf("$ ");
-	conio_input_getline(1, buff, 255);
+	conio_input_getline(-1, buff, 255);
 
 	str = buff;
 
