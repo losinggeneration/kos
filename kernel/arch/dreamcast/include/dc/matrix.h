@@ -40,10 +40,10 @@ void mat_transform(vector_t *invecs, vector_t *outvecs, int veccnt, int vecskip)
 	__asm__ __volatile__( \
 		"fldi1	fr3\n" \
 		"ftrv	xmtrx,fv0\n" \
-		"fdiv	fr3,fr0\n" \
-		"fdiv	fr3,fr1\n" \
 		"fldi1	fr2\n" \
 		"fdiv	fr3,fr2\n" \
+		"fmul	fr2,fr0\n" \
+		"fmul	fr2,fr1\n" \
 		: "=f" (__x), "=f" (__y), "=f" (__z) \
 		: "0" (__x), "1" (__y), "2" (__z) \
 		: "fr3" ); \
