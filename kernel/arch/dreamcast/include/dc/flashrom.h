@@ -130,7 +130,7 @@ int flashrom_get_region();
 #define FLASHROM_ISP_DHCP	0
 #define FLASHROM_ISP_STATIC	1
 #define FLASHROM_ISP_DIALUP	2
-#define FLASHROM_ISP_PPPOE	3
+#define FLASHROM_ISP_PPPOE	4
 
 /**
   This struct will be filled by calling flashrom_get_isp_settings below.

@@ -21,6 +21,7 @@ int main(int argc, char **argv) {
 				"DHCP",
 				"Static",
 				"Dialup(?)",
+				"Unused",
 				"PPPoE"
 			};
 			printf("Method:   %s\n", methods[cfg.method]);
