@@ -18,8 +18,8 @@ __BEGIN_DECLS
 /* This struct holds one export symbol that will be patched into
    loaded ELF files. */
 typedef struct export_sym {
-	const char 	* name;
-	unsigned long	ptr;
+	const char	* name;
+	ptr_t		ptr;
 } export_sym_t;
 
 /* These are the platform-independent exports */
