@@ -1,6 +1,14 @@
+// This can be useful for checking whether some pthread program compiled
+// correctly (e.g. libstdc++).
+// #define MUTEX_DEBUG 1
+
 #include <pthread.h>
 #include <errno.h>
 #include <assert.h>
+
+#if MUTEX_DEBUG == 1
+#include <stdio.h>
+#endif
 
 // XXX Recursive mutexes are not supported ... this could cause deadlocks
 // in code expecting it. Where do you set that!?
@@ -60,6 +68,11 @@ int pthread_mutex_lock(pthread_mutex_t *mutex) {
 	CHK_AND_CREATE;
 
 	mutex_lock(*mutex);
+
+#if MUTEX_DEBUG == 1
+	printf("locked %08x\n", mutex);
+#endif
+
 	return 0;
 }
 
@@ -84,6 +97,11 @@ int pthread_mutex_unlock(pthread_mutex_t *mutex) {
 	CHK_AND_CREATE;
 
 	mutex_unlock(*mutex);
+
+#if MUTEX_DEBUG == 1
+	printf("locked %08x\n", mutex);
+#endif
+
 	return 0;
 }
 

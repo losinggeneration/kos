@@ -38,7 +38,8 @@ typedef struct {
 } pthread_attr_t;
 
 typedef struct {
-	// Empty
+	int initialized;
+	int run;
 } pthread_once_t;
 
 typedef struct {

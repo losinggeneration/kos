@@ -28,6 +28,7 @@ extern "C" {
 #endif
 
 #include <unistd.h>
+#include <sys/_pthread.h>
 
 #if defined(_POSIX_THREADS)
 
