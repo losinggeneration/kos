@@ -33,6 +33,10 @@ OBJS        += $(OBJS_STRING)
 OBJS_TIME := $(patsubst %.c,%.o,$(wildcard time/*.c))
 OBJS      += $(OBJS_TIME)
 
+# C++
+OBJS_CPP := $(patsubst %.c,%.o,$(wildcard cpp/*.c))
+OBJS     += $(OBJS_CPP)
+
 # arch
 ifeq ($(KOS_ARCH), dreamcast)
 	OBJS_ARCH := $(patsubst %.c,%.o,$(wildcard arch/dreamcast/*.c))

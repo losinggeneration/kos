@@ -3,7 +3,7 @@
    stdlib.h
    (c)2001-2002 Dan Potter
 
-   $Id: stdlib.h,v 1.4 2002/09/05 07:51:03 bardtx Exp $
+   $Id: stdlib.h,v 1.5 2003/06/19 04:31:26 bardtx Exp $
 
 */
 
@@ -46,6 +46,7 @@ typedef struct
 void     abort(void) __noreturn;
 int      abs(int);
 int      atexit(void (*)(void));
+void	_atexit_call_all();
 double   atof(const char *);
 int      atoi(const char *);
 long     atol(const char *);

@@ -7,7 +7,7 @@
 
 #include <kos/fs.h>
 
-CVSID("$Id: stdio.c,v 1.5 2003/02/17 00:31:11 bardtx Exp $");
+CVSID("$Id: stdio.c,v 1.6 2003/06/19 04:31:26 bardtx Exp $");
 
 #define MAX_FILE 16
 
@@ -132,7 +132,7 @@ FILE *fopen(const char *path, const char *mode) {
 	}
 
 	file = fs_open (path, fsMode);
-	if (file == 0) {
+	if (file < 0) {
 		release_file(result);
 		return (FILE *)0;
 	}
@@ -146,7 +146,7 @@ FILE *fdopen(int file, const char *mode) {
 
 	FILE *result;
 
-	if (file == 0) {
+	if (file < 0) {
 		return (FILE *)0;
 	}
 	result = alloc_file();

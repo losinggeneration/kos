@@ -1,13 +1,16 @@
 /* KallistiOS ##version##
 
    errno.c
-   (c)2002 Dan Potter
+   Copyright (C)2003 Dan Potter
 
-   $Id: errno.c,v 1.1 2002/03/04 06:09:18 bardtx Exp $
+   $Id: errno.c,v 1.2 2003/06/23 05:21:30 bardtx Exp $
 */
 
-#include <sys/cdefs.h>
+#include <errno.h>
+#include <kos/thread.h>
 
-CVSID("$Id: errno.c,v 1.1 2002/03/04 06:09:18 bardtx Exp $");
+CVSID("$Id: errno.c,v 1.2 2003/06/23 05:21:30 bardtx Exp $");
 
-int errno = 0;
+int * __error() {
+	return thd_get_errno(thd_get_current());
+}

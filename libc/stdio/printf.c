@@ -6,6 +6,7 @@
 
 #include <stdio.h>
 #include <stdarg.h>
+#include <string.h>
 #include <kos/thread.h>
 #include <arch/spinlock.h>
 #include <arch/dbgio.h>
@@ -24,7 +25,10 @@ int printf(const char *fmt, ...) {
 	i = vsprintf(printf_buf, fmt, args);
 	va_end(args);
 
-	dbgio_printk(printf_buf);
+	if (irq_inside_int())
+		dbgio_printk(printf_buf);
+	else
+		fs_write(1, printf_buf, strlen(printf_buf));
 
 	if (!irq_inside_int())
 		spinlock_unlock(&mutex);
@@ -69,7 +73,10 @@ void dbglog(int level, const char *fmt, ...) {
 	i = vsprintf(printf_buf, fmt, args);
 	va_end(args);
 
-	dbgio_printk(printf_buf);
+	if (irq_inside_int())
+		dbgio_printk(printf_buf);
+	else
+		fs_write(1, printf_buf, strlen(printf_buf));
 
 	if (level >= DBG_ERROR && !irq_inside_int())
 		spinlock_unlock(&mutex);

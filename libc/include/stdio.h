@@ -3,7 +3,7 @@
    stdio.h
    (c)2000-2002 Dan Potter
 
-   $Id: stdio.h,v 1.2 2002/03/15 06:45:42 bardtx Exp $
+   $Id: stdio.h,v 1.3 2003/06/23 05:21:31 bardtx Exp $
 
 */
 
@@ -89,6 +89,10 @@ int      vfprintf(FILE *, const char *, va_list);
 int      vprintf(const char *, va_list);
 int      vsnprintf(char *, size_t, const char *, va_list);
 int      vsprintf(char *, const char *, va_list);
+
+/* strerror list */
+extern const char * const sys_errlist[];
+extern const int sys_nerr;
 
 /* To make porting programs a bit easier.. WARNING: only works on GCC */
 #define fprintf(BLAGH, ARGS...) printf(ARGS)

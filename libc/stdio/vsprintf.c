@@ -79,7 +79,9 @@ static const char rcsid[] =
 #endif
 
 /* Define FLOATING_POINT to get floating point. */
+#ifndef _arch_ia32
 #define	FLOATING_POINT
+#endif
 
 static char *	__ultoa (u_long, char *, int, int, char *);
 static char *	__uqtoa (u_quad_t, char *, int, int, char *);
