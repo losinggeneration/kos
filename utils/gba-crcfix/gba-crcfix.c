@@ -9,9 +9,12 @@
 */
 
 #include <stdio.h>
-#include <stdint.h>
 #include <string.h>
 #include <errno.h>
+
+/* We do this instead of stdint.h since that (ironically) seems to be
+   non-portable */
+#define uint8_t unsigned char
 
 #define HEADER_SIZE 0xc0
 
