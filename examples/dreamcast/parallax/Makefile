@@ -5,7 +5,7 @@
 #   
 # $Id: Makefile,v 1.2 2002/09/10 04:40:10 bardtx Exp $
 
-TARGETS = font bubbles raster_melt sinus delay_cube
+TARGETS = font bubbles raster_melt sinus delay_cube rotocube
 
 all:
 	for i in $(TARGETS); do $(KOS_MAKE) -C $$i; done
