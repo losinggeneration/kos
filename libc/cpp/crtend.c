@@ -16,9 +16,12 @@ CVSID("$Id: crtend.c,v 1.1 2003/07/15 07:57:20 bardtx Exp $");
    defining new data in them. */
 typedef void (*fptr)(void);
 
-static fptr ctor_list[1] __attribute__((section(".ctors"))) __unused = { (fptr) 0 };
-static fptr dtor_list[1] __attribute__((section(".dtors"))) __unused = { (fptr) 0 };
+static fptr ctor_list[1] __attribute__((section(".ctors"))) = { (fptr) 0 };
+static fptr dtor_list[1] __attribute__((section(".dtors"))) = { (fptr) 0 };
 
 /* Ensures that this gets linked in */
-void __crtend_pullin() { }
+void __crtend_pullin() {
+	(void)ctor_list;
+	(void)dtor_list;
+}
 
