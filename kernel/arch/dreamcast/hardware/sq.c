@@ -52,6 +52,7 @@ void * sq_cpy(void *dest, void *src, int n) {
 	/* fill/write queues as many times necessary */
 	n>>=5;
 	while(n--) {
+		asm("pref @%0" : : "r" (s + 8)); /* prefetch 32 bytes for next loop */
 		d[0] = *(s++);
 		d[1] = *(s++);
 		d[2] = *(s++);
