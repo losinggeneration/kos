@@ -37,12 +37,16 @@ vsprintf
 # Stdlib
 __assert
 abort
+exit
 
 # String
 memset
 memcmp
 memcpy
 strcat
+strncat
+strcasecmp
+strncasecmp
 strcpy
 strlen
 
