@@ -52,7 +52,7 @@ static int logs[] = {
 };
 
 static inline int calc_aica_vol(int x) {
-	return 0xff - logs[128 + ((x & 0xff) / 2)];
+	return 0xff - logs[x & 0xff];
 }
 
 static inline int calc_aica_pan(int x) {
