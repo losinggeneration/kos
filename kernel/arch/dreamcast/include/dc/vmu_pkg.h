@@ -27,9 +27,9 @@ typedef struct vmu_pkg {
 	int		eyecatch_type;		/* "Eyecatch" type */
 	int		data_len;		/* Number of data (payload) bytes */
 	uint16		icon_pal[16];		/* Icon palette (ARGB4444) */
-	uint8		*icon_data;		/* 512*n bytes of icon data */
-	uint8		*eyecatch_data;		/* Eyecatch data */
-	uint8		*data;			/* Payload data */
+	const uint8	*icon_data;		/* 512*n bytes of icon data */
+	const uint8	*eyecatch_data;		/* Eyecatch data */
+	const uint8	*data;			/* Payload data */
 } vmu_pkg_t;
 
 /* Final header format (will go into the VMU file itself) */
