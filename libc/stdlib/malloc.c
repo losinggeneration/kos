@@ -1831,7 +1831,7 @@ int mem_check_block(Void_t* m) {
 		}
 
 		if (dmg) {
-			printf("  DAMAGED BLOCK DURING REALLOC\n");
+			printf("  DAMAGED BLOCK DURING MEM_CHECK_BLOCK\n");
 		}
 	}
 
@@ -1889,74 +1889,98 @@ Void_t* public_rEALLOc(Void_t* m, size_t bytes) {
 		thd_current->tid, rv, (uint32)m, bytes);
 #endif
 
-	ctl = get_memctl(m);
-	if (ctl->magic != BLOCK_MAGIC) {
+	// We can't check realloc'ing the zero block (this is valid but of
+	// course there is no "previous" block to check).
+	if (m != NULL) {
+		ctl = get_memctl(m);
+		if (ctl->magic != BLOCK_MAGIC) {
 #ifndef KM_DBG_VERBOSE
-		printf("Thread %d/%08lx reallocing block @ %08lx to %d bytes\n",
-			thd_current->tid, rv, (uint32)m, bytes);
+			printf("Thread %d/%08lx reallocing block @ %08lx to %d bytes\n",
+				thd_current->tid, rv, (uint32)m, bytes);
 #endif
-		printf("  'magic' is not correct! %08lx\n", ctl->magic);
-		m = NULL;
-	} else {
-		nt = (uint32 *)ctl;
-		for (i=sizeof(memctl_t)/4; i<BUFFER_SIZE/4; i++) {
-			if (nt[i] != PRE_MAGIC) {
+			printf("  'magic' is not correct! %08lx\n", ctl->magic);
+			dmg = 1;
+		} else {
+			nt = (uint32 *)ctl;
+			for (i=sizeof(memctl_t)/4; i<BUFFER_SIZE/4; i++) {
+				if (nt[i] != PRE_MAGIC) {
 #ifndef KM_DBG_VERBOSE
-				printf("Thread %d/%08lx reallocing block @ %08lx to %d bytes\n",
-					thd_current->tid, rv, (uint32)m, bytes);
+					printf("Thread %d/%08lx reallocing block @ %08lx to %d bytes\n",
+						thd_current->tid, rv, (uint32)m, bytes);
 #endif
-				printf("  pre-magic is wrong at index %d (%08lx)\n",
-					i, nt[i]);
-				dmg = 1;
+					printf("  pre-magic is wrong at index %d (%08lx)\n",
+						i, nt[i]);
+					dmg = 1;
+				}
 			}
-		}
 
-		nt = ctl->post;
-		for (i=0; i<BUFFER_SIZE/4; i++) {
-			if (nt[i] != POST_MAGIC) {
+			nt = ctl->post;
+			for (i=0; i<BUFFER_SIZE/4; i++) {
+				if (nt[i] != POST_MAGIC) {
 #ifndef KM_DBG_VERBOSE
-				printf("Thread %d/%08lx reallocing block @ %08lx to %d bytes\n",
-					thd_current->tid, rv, (uint32)m, bytes);
+					printf("Thread %d/%08lx reallocing block @ %08lx to %d bytes\n",
+						thd_current->tid, rv, (uint32)m, bytes);
 #endif
-				printf("  post-magic is wrong at index %d (%08lx)\n",
-					i, nt[i]);
-				dmg = 1;
+					printf("  post-magic is wrong at index %d (%08lx)\n",
+						i, nt[i]);
+					dmg = 1;
+				}
 			}
+
+			if (dmg) {
+				printf("  DAMAGED BLOCK DURING REALLOC\n");
+			}
+
+			LIST_REMOVE(ctl, list);
 		}
+	} else
+		ctl = NULL;
 
-		if (dmg) {
-			printf("  DAMAGED BLOCK DURING REALLOC\n");
-		}
-
-		LIST_REMOVE(ctl, list);
-
+	if (!dmg) {
 		if (bytes & 31)
 			rs = (bytes & ~31) + 32;
 		else
 			rs = bytes;
 		
 		ctl = (memctl_t *)rEALLOc(ctl, rs + (BUFFER_SIZE*2));
-		assert( ctl != NULL );
+		if (bytes != 0)
+			assert( ctl != NULL );
 
 #ifdef KM_DBG_VERBOSE
 		printf("  realloc'd block %08lx to %08lx\n",
 			(uint32)m, ((uint32)ctl) + BUFFER_SIZE);
 #endif
-	
-		/* Our data is still there, we just need to move the end
-		   block sentinel and add it back to the list */
-		ctl->size = bytes;
-		if ((uint32)m != (uint32)ctl) {
+
+		// If they realloc'd to zero, we're done here.
+		if (bytes != 0) {
+			/* Our data may or may not still be there because the realloc
+			   may have gone from NULL. So redo both sentinels and add
+			   it back to the list. */
+			/* Our data is still there, we just need to move the end
+			   block sentinel and add it back to the list */
+			memset(ctl, 0, sizeof(memctl_t));
+			ctl->magic = BLOCK_MAGIC;
+			ctl->size = bytes;
+			ctl->thread = thd_current->tid;
+			ctl->addr = rv;
+
+			nt = (uint32*)ctl;
+			for (i=sizeof(memctl_t)/4; i<BUFFER_SIZE/4; i++)
+				nt[i] = PRE_MAGIC;
+
+			ctl->size = bytes;
+
 			ctl->post = nt = ((uint32*)ctl) + BUFFER_SIZE/4 + rs/4;
 			for (i=0; i<BUFFER_SIZE/4; i++)
 				nt[i] = POST_MAGIC;
-		}
 
-		LIST_INSERT_HEAD(&block_list, ctl, list);
+			LIST_INSERT_HEAD(&block_list, ctl, list);
 
-		ctl->type = "realloc";
+			ctl->type = "realloc";
 
-		m = (void *)( ((uint32)ctl) + BUFFER_SIZE );
+			m = (void *)( ((uint32)ctl) + BUFFER_SIZE );
+		} else
+			m = NULL;
 	}
 #else
   m = rEALLOc(m, bytes);
