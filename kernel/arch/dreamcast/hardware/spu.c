@@ -8,8 +8,6 @@
 #include <dc/g2bus.h>
 #include <arch/timer.h>
 
-CVSID("$Id: spu.c,v 1.13 2003/04/08 05:45:15 bardtx Exp $");
-
 /*
 
 This module handles the sound processor unit (SPU) of the Dreamcast system.

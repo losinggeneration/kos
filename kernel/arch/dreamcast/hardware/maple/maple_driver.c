@@ -8,8 +8,6 @@
 #include <stdlib.h>
 #include <dc/maple.h>
 
-CVSID("$Id: maple_driver.c,v 1.2 2002/10/10 06:39:47 bardtx Exp $");
-
 /* Register a maple device driver; do this before maple_init() */
 int maple_driver_reg(maple_driver_t *driver) {
 	/* Insert it into the device list */

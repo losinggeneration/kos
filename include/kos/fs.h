@@ -13,7 +13,7 @@
 #include <sys/cdefs.h>
 __BEGIN_DECLS
 
-#include <arch/types.h>
+#include <sys/types.h>
 #include <kos/limits.h>
 #include <time.h>
 #include <sys/queue.h>
@@ -21,7 +21,7 @@ __BEGIN_DECLS
 #include <kos/nmmgr.h>
 
 /* Directory entry; all handlers must conform to this interface */
-typedef struct dirent {
+typedef struct kos_dirent {
 	int	size;
 	char	name[MAX_FN_LEN];
 	time_t	time;
@@ -31,7 +31,7 @@ typedef struct dirent {
 /* File status information; like dirent, this is not the same as the *nix
    variation but it has similar information. */
 struct vfs_handler;
-typedef struct stat {
+typedef struct /*stat*/ {
 	struct vfs_handler	* dev;		/* The VFS handler for this file/dir */
 	uint32			unique;		/* A unique identifier on the VFS for this file/dir */
 	uint32			type;		/* File/Dir type */
@@ -132,14 +132,18 @@ struct fs_hnd;
 extern struct fs_hnd * fd_table[FD_SETSIZE];
 
 /* Open modes */
+#include <sys/fcntl.h>
+#if 0
 #define O_RDONLY	1		/* Read only */
 #define O_RDWR		2		/* Read-write */
 #define O_APPEND	3		/* Append to an existing file */
 #define O_WRONLY	4		/* Write-only */
-#define O_MODE_MASK	7		/* Mask for mode numbers */
-#define O_TRUNC		0x0100		/* Truncate */
+#endif
+//#define O_MODE_MASK	7		/* Mask for mode numbers */
+#define O_MODE_MASK	0x0f		/* Mask for mode numbers */
+//#define O_TRUNC		0x0100		/* Truncate */
 #define O_ASYNC		0x0200		/* Open for asynchronous I/O */
-#define O_NONBLOCK	0x0400		/* Open for non-blocking I/O */
+//#define O_NONBLOCK	0x0400		/* Open for non-blocking I/O */
 #define O_DIR		0x1000		/* Open as directory */
 #define O_META		0x2000		/* Open as metadata */
 

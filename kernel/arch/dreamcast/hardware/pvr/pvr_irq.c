@@ -26,7 +26,7 @@ CVSID("$Id: pvr_irq.c,v 1.10 2003/04/24 03:12:25 bardtx Exp $");
 // Find the next list to DMA out. If we have none left to do, then do
 // nothing. Otherwise, start the DMA and chain back to us upon completion.
 static void dma_next_list(ptr_t data) {
-	int i, did = 0, amt;
+	int i, did = 0;
 	volatile pvr_dma_buffers_t * b;
 
 	// DBG(("dma_next_list\n"));

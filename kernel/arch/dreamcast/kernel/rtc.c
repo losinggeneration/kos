@@ -24,8 +24,6 @@
 #include <arch/rtc.h>
 #include <dc/g2bus.h>
 
-CVSID("$Id: rtc.c,v 1.4 2002/11/16 02:11:58 bardtx Exp $");
-
 /* The boot time; we'll save this in rtc_init() */
 static time_t boot_time = 0;
 

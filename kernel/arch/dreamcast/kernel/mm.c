@@ -16,9 +16,8 @@
 
 #include <arch/types.h>
 #include <arch/arch.h>
+#include <arch/irq.h>
 #include <stdio.h>
-
-CVSID("$Id: mm.c,v 1.4 2003/05/23 02:41:05 bardtx Exp $");
 
 /* The end of the program is always marked by the '_end' symbol. So we'll
    longword-align that and add a little for safety. sbrk() calls will
@@ -36,8 +35,11 @@ int mm_init() {
 }
 
 /* Simple sbrk function */
-void* sbrk(unsigned long increment) {
+void* mm_sbrk(unsigned long increment) {
+	int old;
 	void *base = sbrk_base;
+
+	old = irq_disable();
 
 	if (increment & 3)
 		increment = (increment + 4) & ~3;
@@ -48,6 +50,8 @@ void* sbrk(unsigned long increment) {
 			sbrk_base, base, increment);
 		panic("out of memory; about to run over kernel stack");
 	}
+
+	irq_restore(old);
 	
 	return base;
 }

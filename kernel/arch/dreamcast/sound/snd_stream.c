@@ -263,6 +263,7 @@ snd_stream_hnd_t snd_stream_alloc(snd_stream_callback_t cb, int bufsize) {
 	// And channels
 	streams[hnd].ch[0] = snd_sfx_chn_alloc();
 	streams[hnd].ch[1] = snd_sfx_chn_alloc();
+	printf("snd_stream: alloc'd channels %d/%d\n", streams[hnd].ch[0], streams[hnd].ch[1]);
 
 	return hnd;
 }
@@ -427,7 +428,7 @@ int snd_stream_poll(snd_stream_hnd_t hnd) {
 	ch1pos = g2_read_32(SPU_RAM_BASE + AICA_CHANNEL(streams[hnd].ch[1]) + offsetof(aica_channel_t, pos));
 
 	if (ch0pos >= (streams[hnd].buffer_size/2)) {
-		dbglog(DBG_ERROR, "snd_stream_poll: chan0.pos = %ld (%08lx)\n", ch0pos, ch0pos);
+		dbglog(DBG_ERROR, "snd_stream_poll: chan0(%d).pos = %ld (%08lx)\n", streams[hnd].ch[0], ch0pos, ch0pos);
 		return -1;
 	}
 	

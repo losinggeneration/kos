@@ -6,7 +6,7 @@
 # $Id: Makefile,v 1.5 2002/04/20 17:23:31 bardtx Exp $
 
 # Add stuff to DIRS to auto-compile it with the big tree.
-DIRS = utils libc libm
+DIRS = utils
 ifdef KOS_CCPLUS
 	DIRS += libk++
 endif

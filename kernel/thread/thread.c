@@ -303,6 +303,8 @@ kthread_t *thd_create(void (*routine)(void *param), void *param) {
 			else
 				strcpy(nt->pwd, "/");
 
+			_REENT_INIT_PTR((&(nt->thd_reent)));
+
 			/* Insert it into the thread list */
 			LIST_INSERT_HEAD(&thd_list, nt, t_list);
 
@@ -673,6 +675,15 @@ void thd_set_pwd(kthread_t *thd, const char *pwd) {
 
 int * thd_get_errno(kthread_t * thd) {
 	return &thd->thd_errno;
+}
+
+struct _reent * thd_get_reent(kthread_t *thd) {
+	return &thd->thd_reent;
+}
+
+// For Newlib
+struct _reent * __getreent() {
+	return thd_get_reent(thd_current);
 }
 
 /*****************************************************************************/

@@ -12,7 +12,7 @@
 /* The ultimate for the truly lazy: include and go! No more figuring out
    which headers to include for your project. */
 
-#include <sys/cdefs.h>
+#include <kos/cdefs.h>
 __BEGIN_DECLS
 
 #include <ctype.h>

@@ -10,7 +10,7 @@
 #ifndef __KOS_DBGIO_H
 #define __KOS_DBGIO_H
 
-#include <sys/cdefs.h>
+#include <kos/cdefs.h>
 __BEGIN_DECLS
 
 #include <arch/types.h>

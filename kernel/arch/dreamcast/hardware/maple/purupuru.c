@@ -7,8 +7,6 @@
 #include <dc/maple.h>
 #include <dc/maple/purupuru.h>
 
-CVSID("$Id: purupuru.c,v 1.1 2003/03/15 00:47:23 bardtx Exp $");
-
 /* We actually don't have any decent specs on the purupuru (vibration)
    pack right now, so this module doesn't do much besides make the
    detection work. */

@@ -9,19 +9,19 @@
 
 # Build rules
 %.o: %.c
-	$(KOS_CC) $(KOS_CFLAGS) -c $< -o $@
+	kos-cc -c $< -o $@
 
 %.o: %.cc
-	$(KOS_CCPLUS) $(KOS_CFLAGS) $(KOS_CPPFLAGS) -c $< -o $@
+	kos-c++ -c $< -o $@
 
 %.o: %.cpp
-	$(KOS_CCPLUS) $(KOS_CFLAGS) $(KOS_CPPFLAGS) -c $< -o $@
+	kos-c++ -c $< -o $@
 
 %.o: %.s
-	$(KOS_AS) $(KOS_AFLAGS) $< -o $@
+	kos-as $< -o $@
 
 %.o: %.S
-	$(KOS_AS) $(KOS_AFLAGS) $< -o $@
+	kos-as $< -o $@
 
 subdirs: $(patsubst %, _dir_%, $(SUBDIRS))
 

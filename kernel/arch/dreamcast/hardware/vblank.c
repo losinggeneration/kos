@@ -11,8 +11,6 @@
 #include <arch/irq.h>
 #include <dc/vblank.h>
 
-CVSID("$Id: vblank.c,v 1.1 2003/04/24 03:07:20 bardtx Exp $");
-
 /*
    Functions to multiplex the vblank IRQ out to N client routines.
    This module is necessary because a number of things need to hang

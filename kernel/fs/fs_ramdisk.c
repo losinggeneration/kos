@@ -281,7 +281,7 @@ static void * ramdisk_open(vfs_handler_t * vfs, const char *fn, int mode) {
 			fh[fd].ptr = f->size;
 		break;
 	default:
-		assert_msg( false, "Unknown file mode" );
+		assert_msg( 0, "Unknown file mode" );
 	}
 	
 	/* If we're opening with O_TRUNC, kill the existing contents */

@@ -9,8 +9,6 @@
 #include <assert.h>
 #include <dc/biosfont.h>
 
-CVSID("$Id: biosfont.c,v 1.4 2002/06/27 23:24:43 bardtx Exp $");
-
 /*
 
 This module handles interfacing to the bios font. It supports the standard

@@ -6,8 +6,6 @@
 
 #include <dc/sq.h>
 
-CVSID("$Id: sq.c,v 1.3 2002/02/11 20:00:11 andrewk Exp $");
-
 /*
     Functions to clear, copy, and set memory using the sh4 store queues
 

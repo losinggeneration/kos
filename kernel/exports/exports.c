@@ -19,8 +19,6 @@ to be a somewhat slow process anyway.
 #include <kos/nmmgr.h>
 #include <kos/exports.h>
 
-CVSID("$Id: exports.c,v 1.1 2003/06/19 04:29:00 bardtx Exp $");
-
 static symtab_handler_t st_kern = {
 	{ "sym/kernel/kernel",
 	  0,

@@ -6,7 +6,7 @@
  */
 
 #include <assert.h>
-#include <string.h>
+#include <kos/string.h>
 #include <dc/pvr.h>
 #include <dc/sq.h>
 #include "pvr_internal.h"

@@ -17,7 +17,7 @@ __BEGIN_DECLS
 #include <arch/irq.h>
 #include <arch/arch.h>
 #include <sys/queue.h>
-#include <sys/iovec.h>
+#include <sys/reent.h>
 
 /* Priority values */
 #define PRIO_MAX 4096
@@ -86,6 +86,9 @@ typedef struct kthread {
 	/* Our errno variable */
 	/* XXX: Move to TLS */
 	int	thd_errno;
+
+	/* Our re-ent struct for newlib */
+	struct _reent thd_reent;
 } kthread_t;
 
 /* Thread flag values */
@@ -191,6 +194,9 @@ void thd_set_pwd(kthread_t *thd, const char *pwd);
 
 /* Retrieve a pointer to the thread errno */
 int * thd_get_errno(kthread_t *thd);
+
+/* Retrieve a pointer to the thread reent struct */
+struct _reent * thd_get_reent(kthread_t *thd);
 
 /* Change threading modes */
 int thd_set_mode(int mode);

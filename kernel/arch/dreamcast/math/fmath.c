@@ -6,8 +6,6 @@
 
 #include <dc/fmath.h>
 
-CVSID("$Id: fmath.c,v 1.3 2002/01/06 01:14:48 bardtx Exp $");
-
 /* Returns sin(r), where r is [0..2*PI] */
 float fsin(float r) {
 	return __fsin(r);

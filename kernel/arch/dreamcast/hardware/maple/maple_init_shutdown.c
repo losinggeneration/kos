@@ -10,14 +10,13 @@
 #include <dc/maple.h>
 #include <dc/asic.h>
 #include <dc/vblank.h>
+#include <kos/thread.h>
 
 #include <dc/maple/controller.h>
 #include <dc/maple/keyboard.h>
 #include <dc/maple/mouse.h>
 #include <dc/maple/vmu.h>
 #include <dc/maple/purupuru.h>
-
-CVSID("$Id: maple_init_shutdown.c,v 1.6 2003/04/24 03:07:52 bardtx Exp $");
 
 /*
   This system handles low-level communication/initialization of the maple

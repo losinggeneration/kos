@@ -23,9 +23,6 @@ CVSID("$Id: main.c,v 1.28 2003/04/24 03:04:24 bardtx Exp $");
 
 extern int _bss_start, end;
 
-/* This really ought to be prototyped in a header */
-int	mm_init();
-
 /* Ditto */
 int	main(int argc, char **argv);
 
@@ -69,7 +66,7 @@ int arch_auto_init() {
 		dbgio_write_str("\n--\n");
 		dbgio_write_str(banner);
 	}
-	
+
 	timer_init();			/* Timers */
 	hardware_sys_init();		/* DC low-level hardware init */
 
@@ -296,11 +293,3 @@ void arch_reboot() {
 	/* Reboot */
 	{ void (*rb)() __noreturn; ((uint32*)rb) = (uint32 *)0xa0000000; rb(); }
 }
-
-/* When you make a function called main() in a GCC program, it wants
-   this stuff too. */
-void _main() { }
-
-/* And some library funcs from newlib want this */
-int __errno;
-

@@ -9,7 +9,7 @@
 #ifndef __ARCH_ARCH_H
 #define __ARCH_ARCH_H
 
-#include <sys/cdefs.h>
+#include <kos/cdefs.h>
 __BEGIN_DECLS
 
 #include <dc/video.h>
@@ -82,6 +82,10 @@ void arch_dtors();
 
 /* Hook to ensure linking of crtend.c */
 void __crtend_pullin();
+
+/* These are in mm.c */
+int mm_init();
+void * mm_sbrk(unsigned long increment);
 
 /* Use this macro to determine the level of initialization you'd like in
    your program by default. The defaults line will be fine for most things. */

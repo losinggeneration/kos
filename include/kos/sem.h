@@ -14,7 +14,6 @@
 __BEGIN_DECLS
 
 #include <arch/types.h>
-#include <sys/iovec.h>
 #include <sys/queue.h>
 #include <kos/thread.h>
 

@@ -38,6 +38,7 @@ typedef volatile int8 vint8;
 typedef uint32 ptr_t;
 
 /* another format for type names */
+#ifndef _BSDTYPES_DEFINED
 #define __u_char_defined
 #define __u_short_defined
 #define __u_int_defined
@@ -50,10 +51,14 @@ typedef unsigned int	u_int;
 typedef unsigned long	u_long;
 typedef unsigned short	ushort;
 typedef unsigned int	uint;
+#define _BSDTYPES_DEFINED
+#endif	/* _BSDTYPES_DEFINED */
 
+#if 0
 /* File-specific types */
 typedef size_t ssize_t;
 typedef size_t off_t;
+#endif
 
 /* This type may be used for any generic handle type that is allowed
    to be negative (for errors) and has no specific bit count

@@ -9,8 +9,6 @@
 #include <stdlib.h>
 #include "mintern.h"
 
-CVSID("$Id: mdata.c,v 1.1 2003/05/23 02:04:42 bardtx Exp $");
-
 /* The number of bytes that will be written or read per function call. It's
    not recommended that you change this. */
 #define MODEM_DATA_LIMIT 256

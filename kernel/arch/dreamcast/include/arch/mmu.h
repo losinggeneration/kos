@@ -13,7 +13,7 @@
 __BEGIN_DECLS
 
 #include <arch/types.h>
-#include <sys/iovec.h>
+#include <kos/iovec.h>
 
 /* Since the software has to handle TLB misses on the SH-4, we have freedom
    to use any page table format we want (and thus save space), but we must
