@@ -27,7 +27,7 @@
 BUILD_LIST := `ls */kos/$(KOS_ARCH).cnf | sed -e "s%/kos/$(KOS_ARCH).cnf%%g"`
 
 all:
-	for i in $(BUILD_LIST); do $(KOS_MAKE) -C $$i; done
+	for i in $(BUILD_LIST); do $(KOS_MAKE) -C $$i || exit -1; done
 
 clean:
-	for i in $(BUILD_LIST); do $(KOS_MAKE) -C $$i clean; done
+	for i in $(BUILD_LIST); do $(KOS_MAKE) -C $$i clean || exit -1; done

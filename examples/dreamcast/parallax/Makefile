@@ -8,12 +8,12 @@
 TARGETS = font bubbles raster_melt sinus delay_cube rotocube
 
 all:
-	for i in $(TARGETS); do $(KOS_MAKE) -C $$i; done
+	for i in $(TARGETS); do $(KOS_MAKE) -C $$i || exit -1; done
 
 clean:
-	for i in $(TARGETS); do $(KOS_MAKE) -C $$i clean; done
+	for i in $(TARGETS); do $(KOS_MAKE) -C $$i clean || exit -1; done
 		
 dist:
-	for i in $(TARGETS); do $(KOS_MAKE) -C $$i dist; done
+	for i in $(TARGETS); do $(KOS_MAKE) -C $$i dist || exit -1; done
 
 

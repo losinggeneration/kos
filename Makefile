@@ -21,10 +21,10 @@ error:
 endif
 
 all:
-	for i in $(DIRS); do $(KOS_MAKE) -C $$i; done
+	for i in $(DIRS); do $(KOS_MAKE) -C $$i || exit -1; done
 
 clean:
-	for i in $(DIRS); do $(KOS_MAKE) -C $$i clean; done
+	for i in $(DIRS); do $(KOS_MAKE) -C $$i clean || exit -1; done
 
 distclean: clean
 	-rm -f $(KOS_BASE)/lib/$(KOS_ARCH)/*
