@@ -38,6 +38,12 @@ typedef volatile int8 vint8;
 typedef uint32 ptr_t;
 
 /* another format for type names */
+#define __u_char_defined
+#define __u_short_defined
+#define __u_int_defined
+#define __u_long_defined
+#define __ushort_defined
+#define __uint_defined
 typedef unsigned char	u_char;
 typedef unsigned short	u_short;
 typedef unsigned int	u_int;
