@@ -17,6 +17,7 @@ new PVR API.
 
 #include <kos.h>
 #include <stdlib.h>
+#include <assert.h>
 
 CVSID("$Id: 2ndmix.c,v 1.7 2002/09/05 07:49:38 bardtx Exp $");
 

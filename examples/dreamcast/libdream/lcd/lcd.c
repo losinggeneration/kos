@@ -87,7 +87,7 @@ void lcd_test() {
 	lcd_gs_setup();
 
 	while (!check_start()) {
-		uint8 addr = maple_first_lcd();
+		maple_device_t *addr = maple_enum_type(0, MAPLE_FUNC_LCD);
 		if (addr) {
 			int rv = vmu_draw_lcd(addr, lcd_disp+frame);
 			if (rv < 0)
@@ -96,7 +96,7 @@ void lcd_test() {
 				frame++; if (frame>=8) frame=0;
 			}
 		}
-		usleep(5 * 1000);
+		// usleep(5 * 1000);
 	}
 }
 
