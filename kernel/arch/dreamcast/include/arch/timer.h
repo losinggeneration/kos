@@ -66,6 +66,10 @@ void timer_ms_gettime(uint32 *secs, uint32 *msecs);
    in some situations. */
 uint64 timer_ms_gettime64();
 
+/* Works like timer_ms_gettime64(), but returns microseconds. In theory
+   this is more precise, but the exact preciseness is undetermined. */
+uint64 timer_us_gettime64();
+
 /* Set the callback target for the primary timer. Set to NULL
    to disable callbacks. Returns the address of the previous
    handler. */

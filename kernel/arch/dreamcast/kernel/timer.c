@@ -188,6 +188,22 @@ uint64 timer_ms_gettime64() {
 	return msec;
 }
 
+uint64 timer_us_gettime64() {
+	uint32 cnt, scnt;
+	uint64 usec;
+	uint64 used;
+
+	scnt = timer_ms_counter;
+	cnt = timer_count(TMU2);
+
+	assert( timer_ms_countdown > 0 );
+	used = timer_ms_countdown - cnt;
+	usec = scnt * 1000000;
+	usec += used * 1000000 / timer_ms_countdown;
+
+	return usec;
+}
+
 /* Primary kernel timer. What we'll do here is handle actual timer IRQs
    internally, and call the callback only after the appropriate number of
    millis has passed. For the DC you can't have timers spaced out more
