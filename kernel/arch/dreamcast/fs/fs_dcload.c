@@ -351,6 +351,9 @@ int fs_dcload_detected() {
 	return 0;
 }
 
+static int *dcload_wrkmem = NULL;
+int dcload_type = DCLOAD_TYPE_NONE;
+
 /* Call this before arch_init_all (or any call to dbgio_*) to use dcload's
    console output functions. */
 void fs_dcload_init_console() {
@@ -359,17 +362,11 @@ void fs_dcload_init_console() {
     dbgio_dcload.detected = fs_dcload_detected;
     dbgio_dcload.write_buffer = dcload_write_buffer;
     // dbgio_dcload.read = dcload_read_cons;
-}
 
-static int *dcload_wrkmem = NULL;
-int dcload_type = DCLOAD_TYPE_NONE;
-
-/* Call fs_dcload_init_console() before calling fs_dcload_init() */
-int fs_dcload_init() {
-    
-    /* Check for dcload */
+    // We actually need to detect here to make sure we're not on
+    // dcload-serial, or scif_init must not proceed.
     if (*DCLOADMAGICADDR != DCLOADMAGICVALUE)
-	return -1;
+	return;
 
     /* Give dcload the 64k it needs to compress data (if on serial) */
     dcload_wrkmem = malloc(65536);
@@ -382,6 +379,13 @@ int fs_dcload_init() {
     	    dcload_type = DCLOAD_TYPE_SER;
     	}
     }
+}
+
+/* Call fs_dcload_init_console() before calling fs_dcload_init() */
+int fs_dcload_init() {
+    // This was already done in init_console.
+    if (dcload_type == DCLOAD_TYPE_NONE)
+	return -1;
 
     /* Check for combination of KOS networking and dcload-ip */
     if ((dcload_type == DCLOAD_TYPE_IP) && (__kos_init_flags & INIT_NET)) {
@@ -409,9 +413,8 @@ int fs_dcload_shutdown() {
         free(dcload_wrkmem);
     }
 
-    /* If we're not on serial, and we're not on lwIP, we can
-       continue using the debug channel */
-    if (dcload_type != DCLOAD_TYPE_IP && !lwip_dclsc) {
+    /* If we're not on lwIP, we can continue using the debug channel */
+    if (lwip_dclsc) {
         dcload_type = DCLOAD_TYPE_NONE;
         dbgio_dev_select("scif");
     }

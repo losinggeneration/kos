@@ -10,6 +10,7 @@
 #include <arch/arch.h>
 #include <arch/spinlock.h>
 #include <arch/irq.h>
+#include <dc/fs_dcload.h>
 
 /*
 
@@ -192,6 +193,11 @@ int scif_init_fake() {
 int scif_init() {
 	int i;
 	/* int fifo = 1; */
+
+	// If dcload-serial is active, then do nothing here, or we'll
+	// screw that up.
+	if (dcload_type == DCLOAD_TYPE_SER)
+		return 0;
 
 	/* Disable interrupts, transmit/receive, and use internal clock */
 	SCSCR2 = 0;
