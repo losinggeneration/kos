@@ -1,7 +1,7 @@
 #!/bin/sh
 
 usage() {
-	echo 'genexportshims.sh <inpfile> <outpfile>'
+	echo 'genexportstubs.sh <inpfile> <outpfile>'
 }
 
 # Check for enough parameters
