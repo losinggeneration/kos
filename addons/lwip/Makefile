@@ -39,14 +39,11 @@ LWIPOBJS=$(LWIPFILES:.c=.o)
 
 DCLOADOBJS=dcload/commands.o dcload/dcload-lwip.o dcload/dcload_lwip_syscall.o dcload/syscalls.o
 
+TARGET = liblwip.a
 OBJS = $(LWIPOBJS) liblwip.o dhcp/dhcp.o $(DCLOADOBJS)
 
 SUBDIRS = dcload
 
-all: $(OBJS)
-	rm -f $(KOS_ADDONS_BASE)/lib/liblwip4.a
-	$(KOS_AR) rcs $(KOS_ADDONS_BASE)/lib/liblwip4.a $(OBJS)
-
 # Grab the shared Makefile pieces
-include $(KOS_BASE)/Makefile.prefab
+include ../Makefile.prefab
 

@@ -1,10 +1,10 @@
 # KallistiOS ##version##
 #
-# kernel Makefile
-# (c)2001 Dan Potter
+# libjpeg Makefile
 #   
 # $Id: Makefile,v 1.4 2003/02/27 04:25:40 bardtx Exp $
 
+TARGET = libjpeg.a
 OBJS = 	jcapimin.o jcapistd.o jccoefct.o jccolor.o jcdctmgr.o jchuff.o \
 	jcinit.o jcmainct.o jcmarker.o jcmaster.o jcomapi.o jcparam.o \
         jcphuff.o jcprepct.o jcsample.o jctrans.o jdapimin.o jdapistd.o \
@@ -16,17 +16,6 @@ OBJS = 	jcapimin.o jcapistd.o jccoefct.o jccolor.o jcdctmgr.o jchuff.o \
 OBJS +=	jmemnobs.o
 OBJS += kos_img.o
 
-# Compat with older KOS functions for DC usage
-ifeq ($(KOS_ARCH), dreamcast)
-	OBJS += kos_texture.o
-endif
-
-SUBDIRS =
-
-myall: $(OBJS)
-	rm -f $(KOS_ADDONS_BASE)/lib/libjpeg.a
-	$(KOS_AR) rcs $(KOS_ADDONS_BASE)/lib/libjpeg.a $(OBJS)
-
-include $(KOS_BASE)/Makefile.prefab
+include ../Makefile.prefab
 
 

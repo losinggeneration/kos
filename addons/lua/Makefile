@@ -5,6 +5,7 @@
 LUA= .
 
 include $(LUA)/config
+include kos/$(KOS_ARCH).cnf
 
 # primary targets (only "all" and "clean" are useful after distribution)
 all:
@@ -13,7 +14,7 @@ all:
 #	cd src/luac; $(MAKE) $@
 	cd src/lib; $(MAKE) $@
 #	cd src/lua; $(MAKE) $@
-	-cp lib/*.a ../lib/
+	-cp lib/*.a ../lib/$(KOS_ARCH)/
 
 clean co klean:
 	cd include; $(MAKE) $@
@@ -21,6 +22,8 @@ clean co klean:
 #	cd src/luac; $(MAKE) $@
 	cd src/lib; $(MAKE) $@
 #	cd src/lua; $(MAKE) $@
+	rm -f ../lib/$(KOS_ARCH)/liblua.a
+	rm -f ../lib/$(KOS_ARCH)/liblualib.a
 
 # remove debug information from binaries
 strip:

@@ -5,15 +5,10 @@
 #   
 # $Id: Makefile,v 1.2 2003/02/27 04:25:42 bardtx Exp $
 
-OBJS  = 
+TARGET = libtremor.a
+OBJS  =
 SUBDIRS = xiph kos
+LIB_OBJS = build/*.o
+LOCAL_CLEAN = build/*.o build/*.a
 
-myall: subdirs
-	rm -f $(KOS_ADDONS_BASE)/lib/libtremor.a
-	$(KOS_AR) rcs $(KOS_ADDONS_BASE)/lib/libtremor.a build/*.o
-
-include $(KOS_BASE)/Makefile.prefab
-
-clean: clean_subdirs
-	rm -f build/*.o build/*.a
-
+include ../Makefile.prefab

@@ -1,3 +1,4 @@
+TARGET = libbz2.a
 OBJS= blocksort.o  \
       huffman.o    \
       crctable.o   \
@@ -6,11 +7,6 @@ OBJS= blocksort.o  \
       decompress.o \
       bzlib.o
 
-myall: $(OBJS)
-	rm -f $(KOS_ADDONS_BASE)/lib/libbz2.a
-	$(KOS_AR) rcs $(KOS_ADDONS_BASE)/lib/libbz2.a $(OBJS)
-
-KOS_LOCAL_CFLAGS = -I$(KOS_ADDONS_BASE)/include/bzlib
-
-include $(KOS_BASE)/Makefile.prefab
+include ../Makefile.prefab
+KOS_LOCAL_CFLAGS := $(KOS_LOCAL_CFLAGS) -I$(KOS_ADDONS_BASE)/include/bzlib
 

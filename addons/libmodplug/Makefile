@@ -1,3 +1,4 @@
+TARGET = libmodplug.a
 OBJS=	tables.o         \
 	sndmix.o         \
 	sndfile.o        \
@@ -31,11 +32,7 @@ OBJS=	tables.o         \
 #	load_mt2.o       \
 #	load_psm.o       \
 
-myall: $(OBJS)
-	rm -f $(KOS_ADDONS_BASE)/lib/libmodplug.a
-	$(KOS_AR) rcs $(KOS_ADDONS_BASE)/lib/libmodplug.a $(OBJS)
-
 KOS_LOCAL_CFLAGS = -I$(KOS_ADDONS_BASE)/include/modplug -DMODPLUG_BASIC_SUPPORT -DFASTSOUNDLIB
 
-include $(KOS_BASE)/Makefile.prefab
+include ../Makefile.prefab
 
