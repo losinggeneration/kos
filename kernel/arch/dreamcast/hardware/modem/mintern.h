@@ -20,6 +20,8 @@
   #define REGLOC(x) (0xA0600400 + (x) * 4)
 #endif
 
+#define MAKE_DSP_ADDR(x) ((x) & 0xFF), (((x) >> 8) & 0xF)
+
 #ifndef G2_8BP_RST
   #define G2_8BP_RST 0xA0600480
 #endif

@@ -332,7 +332,7 @@ void modem_reset(void)
 }
 
 /* Changes modes of operation for the modem */
-int modem_set_mode(int mode, mspeed_t speed)
+int modem_set_mode(int mode, modem_speed_t speed)
 {
     if (mode != MODEM_MODE_REMOTE && mode != MODEM_MODE_DIRECT &&
         mode != MODEM_MODE_ANSWER)
@@ -379,6 +379,12 @@ int modem_set_mode(int mode, mspeed_t speed)
     {
            case MODEM_MODE_REMOTE:
                 /* Put the modem into dialing mode, don't open the line */
+                // This procedure is described on page 117 of the PDF.
+
+                // Open the line.
+                modemSetBits(REGLOC(0x7), 0x2);
+                modemClearBits(REGLOC(0x8), 0x1);
+
                 /* Disable the DATA bit so that the hardware interrupts will
                    work as expected. It also doesn't hurt to clear the DTR
                    bit. */
@@ -386,6 +392,17 @@ int modem_set_mode(int mode, mspeed_t speed)
 
                 /* Set the dialing mode */
                 modemWrite(REGLOC(0x12), 0x81);
+
+                /* Notify the modem that the configuration has changed */
+                modemSetBits(REGLOC(0x1F), 0x1);
+
+                // Delay at least 4ms
+                timer_spin_sleep(10);
+
+                /* Use DTMF tones, not pulses; also set into
+                   origination mode. */
+                modemSetBits(REGLOC(0x9), (1 << 5) | (1 << 4));
+                //modemSetBits(REGLOC(0x9), (1 << 5));
 
                 /* Notify the modem that the configuration has changed */
                 modemSetBits(REGLOC(0x1F), 0x1);
@@ -412,6 +429,107 @@ int modem_set_mode(int mode, mspeed_t speed)
     modemIntSetHandler(modemCfg.protocol, mode);
 
     return 1;
+}
+
+// Translate a DTMF symbol to an output word for the modem.
+static int dtmf_trans(int sym) {
+	static char trans[16] = {
+		'0', '1', '2', '3', '4', '5', '6', '7', '8', '9',
+		'*', '#', 'A', 'B', 'C', 'D'
+	};
+
+	int i;
+	for (i=0; i<16; i++)
+		if (trans[i] == sym)
+			return i;
+
+	return -1;
+}
+
+int modem_dialtone_detected() {
+	//if (modemRead(REGLOC(0xB)) & 0x08)
+	return (modemRead(REGLOC(0xB)) & 0xE0) == 0xE0;
+}
+
+int modem_wait_dialtone(int timeout) {
+	while (timeout > 0) {
+		if (modem_dialtone_detected())
+			return 0;
+		thd_sleep(100);
+		timeout -= 100;
+	}
+
+	return -1;
+}
+
+// Assumes that we're in REMOTE mode.
+int modem_dial(const char * digits) {
+	int i, tot, w;
+	uint8 sym;
+
+	// Start off by dialing the requested digits.
+	tot = strlen(digits);
+	for (i=0; i<tot; i++) {
+		// Get the DTMF symbol.
+		w = dtmf_trans(digits[i]);
+		if (w < 0) {
+			dbglog(DBG_ERROR, "modem_dial: unknown DTMF symbol '%c'\n", digits[i]);
+			continue;
+		}
+		sym = (uint8)w;
+	
+		// Write the DTMF symbol to TBUFFER.
+		modemWrite(REGLOC(0x10), sym);
+
+		// Wait for the modem to eat it.
+		while (!(modemRead(REGLOC(0x1E)) & 0x08))
+			thd_sleep(10);
+	}
+
+	/*// Now wait until ATV25 (answer tone detected) is set.
+	while (answer_timeout > 0) {
+		// Is ATV25 set?
+		if (modemRead(REGLOC(0xB) & 0x10))
+			break;
+
+		thd_sleep(10);
+		answer_timeout -= 10;
+	}
+
+	// Did we time out or succeed?
+	if (!(modemRead(REGLOC(0xB) & 0x10))) {
+		// Close the line
+		modemClearBits(REGLOC(0x7), 0x2);
+		return -1;
+	}
+
+	// Wait for one second after the tone is recognized (by standard).
+	thd_sleep(1000);
+
+	// Set the AUTO bit to begin auto-negotiation.
+	modemSetBits(REGLOC(0x15), 1); */
+
+	// This apparently required at the end of the sequence.
+	modemWrite(REGLOC(0x12), 0x81);
+	modemSetBits(REGLOC(0x9), 0x10); /* Originate mode */
+	modemSetBits(REGLOC(0x1F), 0x1);
+
+	modemCfg.state    = (unsigned char)MODEM_MODE_DIRECT;
+	modemIntSetHandler(modemCfg.protocol, MODEM_MODE_DIRECT);
+
+	// Success! We hope...
+	return 0;
+}
+
+// Set the modem speaker on or off. This doesn't seem to work on my
+// test modem, but then even turning it on in PlanetWeb doesn't seem
+// to work for me...
+void modem_speaker(int enabled) {
+	modemClearBits(REGLOC(0x1), 0xC0);
+	if (enabled) {
+		modemSetBits(REGLOC(0x1), 0x40);
+	}
+	modemSetBits(REGLOC(0x1F), 0x1);
 }
 
 void modem_disconnect(void)

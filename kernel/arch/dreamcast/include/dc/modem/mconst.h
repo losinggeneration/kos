@@ -9,8 +9,8 @@
 */
 
 /* Modem constants are defined here. Automatically included by modem.h */
-#ifndef __MCONST_H
-#define __MCONST_H
+#ifndef __MODEM_MCONST_H
+#define __MODEM_MCONST_H
 
 /* Each speed constant contains information about the data rate in bps and the
    protocol that's being used. The first 4 bits identify the the speed that's
@@ -45,10 +45,10 @@
 #define MODEM_PROTOCOL_V32BIS 0x4
 #define MODEM_PROTOCOL_V34    0x5
 
-#define MODEM_SPEED_GET_PROTOCOL(x) ((mspeed_t)(x) >> 4)
-#define MODEM_SPEED_GET_SPEED(x)    ((mspeed_t)(x) & 0xF)
-#define MODEM_MAKE_SPEED(p, s)      ((mspeed_t)((((p) & 0xF) << 4) | ((s) & 0xF)))
+#define MODEM_SPEED_GET_PROTOCOL(x) ((modem_speed_t)(x) >> 4)
+#define MODEM_SPEED_GET_SPEED(x)    ((modem_speed_t)(x) & 0xF)
+#define MODEM_MAKE_SPEED(p, s)      ((modem_speed_t)((((p) & 0xF) << 4) | ((s) & 0xF)))
 
-typedef unsigned char mspeed_t;
+typedef unsigned char modem_speed_t;
 
 #endif

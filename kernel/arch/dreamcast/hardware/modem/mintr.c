@@ -22,14 +22,11 @@ unsigned char *modemTimeoutCallbackFlag         = NULL;
 void          (*modemTimeoutCallbackCode)(void) = NULL;
 
 #define IRQ_ACK\
-  /* Acknowledge the interrupt */\
-  ASIC_ACK_B = 1 << 2;\
-\
   if (modemRead(REGLOC(0x1F)) & 0x80)\
      modemClearBits(REGLOC(0x1F), 0x8);
 
 /* An interrupt handler that doesn't do anything in particular */
-static void modemCallbackNothing(irq_t source, irq_context_t *context)
+static void modemCallbackNothing(uint32 code)
 {
      IRQ_ACK
 }
@@ -147,7 +144,7 @@ void modemConnection(void)
      }
 }
 
-static void modemCallback(irq_t source, irq_context_t *context)
+static void modemCallback(uint32 code)
 {
      IRQ_ACK
 
@@ -160,19 +157,14 @@ void modemIntInit(void)
      atexit(modemIntShutdown);
 
      /* Set the default IRQ handler */
-     irq_set_handler(EXC_IRQB, modemCallbackNothing);
-
-     /* Enable G2 interrupts */
-     ASIC_IRQB_B = 1 << 2;
+     asic_evt_set_handler(ASIC_EVT_EXP_8BIT, modemCallbackNothing);
+     asic_evt_enable(ASIC_EVT_EXP_8BIT, ASIC_IRQB);
 }
 
 void modemIntShutdown(void)
 {
-     /* Disable G2 interrupts */
-     ASIC_IRQB_B &= ~(ASIC_EVT_EXP_8BIT & 0xFF);
-
-     /* Set a NULL IRQ handler */
-     irq_set_handler(EXC_IRQB, NULL);
+     asic_evt_disable(ASIC_EVT_EXP_8BIT, ASIC_IRQB);
+     asic_evt_set_handler(ASIC_EVT_EXP_8BIT, NULL);
 }
 
 /* Communicates with the modem's DSP to mask out some events on which a
@@ -181,7 +173,7 @@ void modemIntShutdown(void)
 void modemIntConfigModem(void)
 {
      /* Set the default IRQ handler */
-     irq_set_handler(EXC_IRQB, modemCallbackNothing);
+     asic_evt_set_handler(ASIC_EVT_EXP_8BIT, modemCallbackNothing);
 
      /* Disable memory access interrupts by setting bit 6 of memory location
         0x89 */
@@ -238,7 +230,7 @@ void modemIntSetHandler(int protocol, int mode)
             case MODEM_MODE_DIRECT:
                  modemCfg.actual.state      = MODEM_STATE_CONNECT_WAIT;
                  modemCfg.actual.connecting = 1;
-                 irq_set_handler(EXC_IRQB, modemCallback);
+                 asic_evt_set_handler(ASIC_EVT_EXP_8BIT, modemCallback);
             break;
 
             case MODEM_MODE_ANSWER:
@@ -249,7 +241,7 @@ void modemIntSetHandler(int protocol, int mode)
 void modemIntClearHandler(void)
 {
      /* Set the default IRQ handler */
-     irq_set_handler(EXC_IRQB, modemCallbackNothing);
+     asic_evt_set_handler(ASIC_EVT_EXP_8BIT, modemCallbackNothing);
 }
 
 /* Timeout timer interrupt code. It uses TMU1 and can be setup to either set

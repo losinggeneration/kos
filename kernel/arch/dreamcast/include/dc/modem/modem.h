@@ -17,12 +17,10 @@
    http://ev.dhs.org/dreamcast/
 */
 
-#ifndef __MODEM_H
-#define __MODEM_H
+#ifndef __DC_MODEM_MODEM_H
+#define __DC_MODEM_MODEM_H
 
 #include "mconst.h"
-
-#define MAKE_DSP_ADDR(x) ((x) & 0xFF), (((x) >> 8) & 0xF)
 
 #define MODEM_MODE_REMOTE 0   /* Dial a remote computer */
 #define MODEM_MODE_DIRECT 1   /* Wait for a handshake signal */
@@ -66,7 +64,11 @@
 //From modem.c:
 int           modem_init(void);
 void          modem_shutdown(void);
-int           modem_set_mode(int mode, mspeed_t speed);
+int           modem_set_mode(int mode, modem_speed_t speed);
+int           modem_dialtone_detected();
+int           modem_wait_dialtone(int ms_timeout);
+int           modem_dial(const char * digits);
+void          modem_speaker(int enabled);
 void          modem_disconnect(void);
 int           modem_is_connecting(void);
 int           modem_is_connected(void);
