@@ -9,6 +9,7 @@
 #include <string.h>
 #include <malloc.h>
 #include <stdio.h>
+#include <reent.h>
 #include <kos/thread.h>
 #include <kos/sem.h>
 #include <kos/cond.h>
@@ -438,6 +439,7 @@ void thd_schedule(int front_of_line, uint64 now) {
 	thd_remove_from_runnable(thd);
 
 	thd_current = thd;
+	_impure_ptr = &thd->thd_reent;
 	thd->state = STATE_RUNNING;
 
 	/* Make sure the thread hasn't underrun its stack */
@@ -471,6 +473,7 @@ void thd_schedule_next(kthread_t *thd) {
 
 	thd_remove_from_runnable(thd);
 	thd_current = thd;
+	_impure_ptr = &thd->thd_reent;
 	thd_current->state = STATE_RUNNING;
 	irq_set_context(&thd_current->context);
 }
@@ -681,11 +684,6 @@ struct _reent * thd_get_reent(kthread_t *thd) {
 	return &thd->thd_reent;
 }
 
-// For Newlib
-struct _reent * __getreent() {
-	return thd_get_reent(thd_current);
-}
-
 /*****************************************************************************/
 
 /* Change threading modes */
@@ -810,6 +808,8 @@ void thd_shutdown() {
 
 	/* Not running */
 	thd_mode = THD_MODE_NONE;
+
+	// XXX _impure_ptr is borked
 }
 
 

@@ -48,10 +48,10 @@ typedef volatile int spinlock_t;
 		*(A) = 0; \
 	} while (0)
 
-__END_DECLS
-
 /* Determine if a lock is locked */
 #define spinlock_is_locked(A) ( *(A) != 0 )
+
+__END_DECLS
 
 #endif	/* __ARCH_SPINLOCK_H */
 

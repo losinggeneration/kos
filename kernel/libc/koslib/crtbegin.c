@@ -17,9 +17,13 @@ typedef void (*fptr)(void);
 static fptr ctor_list[1] __attribute__((section(".ctors"))) = { (fptr) -1 };
 static fptr dtor_list[1] __attribute__((section(".dtors"))) = { (fptr) -1 };
 
+void __verify_newlib_patch();
+
 /* Call this to execute all ctors */
 void arch_ctors() {
 	fptr *fpp;
+
+	__verify_newlib_patch();
 
 	/* Run up to the end of the list (defined by crtend) */
 	for (fpp=ctor_list + 1; *fpp != 0; ++fpp)

@@ -92,8 +92,6 @@ struct  dcload_stat {
 
 typedef struct dcload_stat dcload_stat_t;
 
-#define S_IFDIR 0040000 /* directory */
-
 /* Printk replacement */
 void dcload_printk(const char *str);
 
