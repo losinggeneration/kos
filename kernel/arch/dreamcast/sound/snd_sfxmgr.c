@@ -278,19 +278,26 @@ int snd_sfx_play_chn(int chn, sfxhnd_t idx, int vol, int pan) {
 }
 
 int snd_sfx_play(sfxhnd_t idx, int vol, int pan) {
-	int chn, old;
+	int chn, moved, old;
 
 	// This isn't perfect.. but it should be good enough.
 	old = irq_disable();
-	chn = sfx_nextchan++;
-	while ((sfx_inuse & (1 << sfx_nextchan)) && sfx_nextchan != chn) {
-		if (sfx_nextchan > 64)
-			sfx_nextchan = 0;
-		sfx_nextchan++;
+	chn = sfx_nextchan;
+	moved = 0;
+	while (sfx_inuse & (1 << chn)) {
+		chn = (chn + 1) % 64;
+		if (sfx_nextchan == chn)
+			break;
+		moved++;
 	}
 	irq_restore(old);
 
-	return snd_sfx_play_chn(chn, idx, vol, pan);
+	if (moved && chn == sfx_nextchan) {
+		return -1;
+	} else {
+		sfx_nextchan = (chn + 2) % 64;	// in case of stereo
+		return snd_sfx_play_chn(chn, idx, vol, pan);
+	}
 }
 
 void snd_sfx_stop(int chn) {
