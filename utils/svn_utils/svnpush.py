@@ -41,7 +41,11 @@ svnadmin_bin = 'svnadmin'
 apache_initrc = '/etc/init.d/apache2'
 
 #######################################################################
-# Implicit config globals, from cmdline
+# Implicit config globals, from cmdline. Set these to something besides
+# None if you want to have parameter defaults. If you set one, you must
+# set them all.
+
+global path_svnrepo, path_output, path_scp
 
 # path_svnrepo - path to the SVN repo we're working on
 path_svnrepo = None
@@ -51,6 +55,18 @@ path_output = None
 
 # path_scp     - scp target to compare against / update
 path_scp = None
+
+# Verify the defaulted parameters
+try:
+	if (path_svnrepo is not None) or (path_output is not None) \
+			or (path_scp is not None):
+		assert path_svnrepo is not None
+		assert path_output is not None
+		assert path_scp is not None
+except AssertionError:
+	print "Some parameters were defaulted, others were not."
+	print "Please correct this in svnpush.py and try again."
+	sys.exit(-1)
 
 #######################################################################
 # SVN Utility funcs
@@ -178,19 +194,42 @@ def scpSetRevision(rev):
 # Main
 
 def help():
-	print "Foo!"
-	sys.exit(-1)
+	global path_svnrepo, path_output, path_scp
+
+	# Preamble is always the same
+	print "usage: svnpush.py ",
+
+	# Do we have defaults?
+	if path_svnrepo is not None:
+		print "[<local repo path> <dump output path> <scp target>]"
+		print "<local repo path> defaults to '%s'" % path_svnrepo
+		print "<dump output path> defaults to '%s'" % path_output
+		print "<scp target> defaults to '%s'" % path_scp
+	else:
+		print "<local repo path> <dump output path> <scp target>"
 
 def main(argv):
-	# Make sure we're called with enough parameters
-	if len(argv) < 4:
-		help()
-
-	# Set our globals
 	global path_svnrepo, path_output, path_scp
-	path_svnrepo = argv[1]
-	path_output = argv[2]
-	path_scp = argv[3]
+
+	print """svnpush.py
+Subversion push-based repository "server"
+Copyright (C)2003 Dan Potter
+"""
+
+	# Make sure we're called with enough parameters
+	if path_svnrepo is None:
+		if  len(argv) < 4:
+			help()
+			sys.exit(-1)
+		else:
+			# Set our globals
+			path_svnrepo = argv[1]
+			path_output = argv[2]
+			path_scp = argv[3]
+	else:
+		if len(argv) > 1 and len(argv) < 4:
+			help()
+			sys.exit(-1)
 
 	print "Repo at %s, output at %s, scp at %s" \
 		% (path_svnrepo, path_output, path_scp)
