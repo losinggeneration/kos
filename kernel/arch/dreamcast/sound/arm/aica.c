@@ -6,8 +6,8 @@
    ARM support routines for using the wavetable channels
 */
 
-#include "aica.h"
 #include "aica_cmd_iface.h"
+#include "aica.h"
 
 extern volatile aica_channel_t *chans;
 
@@ -18,9 +18,9 @@ void aica_init() {
 	SNDREG32(0x2800) = 0x0000;
 	
 	for (i=0; i<64; i++) {
-		for (j=0; j<0x80; j+=4)
-			CHNREG32(i, j) = 0;
 		CHNREG32(i,0) = 0x8000;
+		for (j=4; j<0x80; j+=4)
+			CHNREG32(i, j) = 0;
 		CHNREG32(i,20) = 0x1f;
 	}
 
@@ -81,7 +81,7 @@ static inline int calc_aica_pan(int x) {
 
    This routine (and the similar ones) owe a lot to Marcus' sound example -- 
    I hadn't gotten quite this far into dissecting the individual regs yet. */
-void aica_play(int ch) {
+void aica_play(int ch, int delay) {
 	unsigned long smpptr	= chans[ch].base;
 	int mode		= chans[ch].type;
 	int loopst		= chans[ch].loopstart;
@@ -93,6 +93,7 @@ void aica_play(int ch) {
 	unsigned long freq_lo, freq_base = 5644800;
 	int freq_hi = 7;
 	int i;
+	uint32 playCont;
 
 	/* Stop the channel (if it's already playing) */
 	aica_stop(ch);
@@ -118,10 +119,10 @@ void aica_play(int ch) {
 	/* Write resulting values */
 	CHNREG32(ch, 24) = (freq_hi << 11) | (freq_lo & 1023);
 	
-	/* Set volume, pan, and some other things that we don't know what
-	   they do =) */
+	/* Set volume, pan */
 	CHNREG8(ch, 36) = calc_aica_pan(pan);
 	CHNREG8(ch, 37) = 0xf;
+	/* turn off Low Pass Filter (LPF) */
 	CHNREG8(ch, 40) = 0x24;
 	/* Convert the incoming volume and pan into hardware values */
 	/* Vol starts at zero so we can ramp */
@@ -142,14 +143,33 @@ void aica_play(int ch) {
 	   it's not set, the sample plays once and terminates. We'll
 	   also set the bits to start playback here. */
 	CHNREG32(ch, 4) = smpptr & 0xffff;
-	if (loopflag)
-		CHNREG32(ch, 0) = 0xc000 | 0x0200 | (mode<<7) | (smpptr >> 16);	/* Loops */
-	else
-		CHNREG32(ch, 0) = 0xc000 | 0x0000 | (mode<<7) | (smpptr >> 16);	/* No loop */
-	
+	playCont = (mode<<7) | (smpptr >> 16);
 	vol = calc_aica_vol(vol);
-	for (i=0xff; i>=vol; i--)
-		CHNREG8(ch, 41) = i;
+	
+	if (loopflag)
+		playCont |= 0x0200;
+
+	if (delay) {
+		CHNREG32(ch, 0) = playCont; 		/* key off */
+		CHNREG8(ch, 41) = vol;
+	} else {
+		CHNREG32(ch, 0) = 0xc000 | playCont;	/* key on */
+	
+		/* ramp up the volume */
+		for (i=0xff; i>=vol; i--)
+			CHNREG8(ch, 41) = i;
+	}
+}
+
+/* Start sound on all channels specified by chmap bitmap */
+void aica_sync_play(uint32 chmap) {
+	int i = 0;
+	while (chmap) {
+		if (chmap & 0x1)
+			CHNREG32(i, 0) = CHNREG32(i, 0) | 0xc000;
+		i++;
+		chmap >>= 1;
+	}
 }
 
 /* Stop the sound on a given channel */

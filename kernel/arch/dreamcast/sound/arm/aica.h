@@ -15,7 +15,8 @@
 #define CHNREG8(chn, x) (*CHNREG8A(chn, x))
 
 void aica_init();
-void aica_play(int ch);
+void aica_play(int ch, int delay);
+void aica_sync_play(uint32 chmap);
 void aica_stop(int ch);
 void aica_vol(int ch);
 void aica_pan(int ch);

@@ -88,6 +88,11 @@ typedef struct aica_channel {
 #define AICA_CH_CMD_STOP	0x00000002
 #define AICA_CH_CMD_UPDATE	0x00000003
 
+/* Start values */
+#define AICA_CH_START_MASK	0x00300000
+
+#define AICA_CH_START_DELAY	0x00100000 /* Set params, but delay key-on */
+#define AICA_CH_START_SYNC	0x00200000 /* Set key-on for all selected channels */
 
 /* Update values */
 #define AICA_CH_UPDATE_MASK	0x000ff000

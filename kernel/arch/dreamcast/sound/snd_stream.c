@@ -353,7 +353,7 @@ void snd_stream_start(snd_stream_hnd_t hnd, uint32 freq, int st) {
 	cmd->timestamp = 0;
 	cmd->size = AICA_CMDSTR_CHANNEL_SIZE;
 	cmd->cmd_id = streams[hnd].ch[0];
-	chan->cmd = AICA_CH_CMD_START;
+	chan->cmd = AICA_CH_CMD_START | AICA_CH_START_DELAY;
 	chan->base = streams[hnd].spu_ram_sch[0];
 	chan->type = AICA_SM_16BIT;
 	chan->length = (streams[hnd].buffer_size/2);
@@ -361,7 +361,7 @@ void snd_stream_start(snd_stream_hnd_t hnd, uint32 freq, int st) {
 	chan->loopstart = 0;
 	chan->loopend = (streams[hnd].buffer_size/2);
 	chan->freq = freq;
-	chan->vol = 240;
+	chan->vol = 255;
 	chan->pan = 0;
 	snd_sh4_to_aica(tmp, cmd->size);
 
@@ -371,6 +371,12 @@ void snd_stream_start(snd_stream_hnd_t hnd, uint32 freq, int st) {
 	chan->pan = 255;
 	snd_sh4_to_aica(tmp, cmd->size);
 
+	/* Start both channels simultaneously */
+	cmd->cmd_id = 	(1 << streams[hnd].ch[0]) |
+			(1 << streams[hnd].ch[1]);
+	chan->cmd = AICA_CH_CMD_START | AICA_CH_START_SYNC;
+	snd_sh4_to_aica(tmp, cmd->size);
+	
 	/* Process the changes */
 	if (!streams[hnd].queueing)
 		snd_sh4_to_aica_start();

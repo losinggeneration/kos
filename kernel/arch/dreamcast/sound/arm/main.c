@@ -50,9 +50,13 @@ void process_chn(uint32 chn, aica_channel_t *chndat) {
 	case AICA_CH_CMD_NONE:
 		break;
 	case AICA_CH_CMD_START:
-		memcpy((void*)(chans+chn), chndat, sizeof(aica_channel_t));
-		chans[chn].pos = 0;
-		aica_play(chn);
+		if (chndat->cmd & AICA_CH_START_SYNC) {
+			aica_sync_play(chn);
+		} else {
+			memcpy((void*)(chans+chn), chndat, sizeof(aica_channel_t));
+			chans[chn].pos = 0;
+			aica_play(chn, chndat->cmd & AICA_CH_START_DELAY);
+		}
 		break;
 	case AICA_CH_CMD_STOP:
 		aica_stop(chn);
