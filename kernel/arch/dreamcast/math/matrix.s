@@ -514,3 +514,84 @@ _mat_transform:
 	fmov		fr0,@-r5
 
 	
+! Transform zero or more sets of vertices using the current internal
+! matrix, directly to the store queues. Each vertex is 32 bytes long.
+! All non-xyz data will be copied over along with the transformed
+! coordinates. Minimum number of vertices: 1.
+!
+! r4: Input vectors
+! r5: Output (should be a store queue address)
+! r6: Number of vectors
+!
+! Note that the QACRx registers must have already been set.
+!
+! This was contributed by Jim Ursetto.
+!
+.globl _mat_transform_sq
+_mat_transform_sq:
+
+	pref @r4
+!   nop
+
+	fldi1		fr9
+	add         #4,r4     ! skip over flags
+
+.loop1:
+	! Load a vector.
+
+	fmov		@r4+,fr0  ! x
+	add			#32, r5   ! end of destination sq
+	fmov		@r4+,fr1  ! y
+!	nop
+	fmov		@r4+,fr2  ! z
+	! nop
+	fldi1		fr3       ! w (1)
+	! nop                   
+	! nop nop
+	! nop nop   ! 2 cycle stall: fldi1->ftrv dependency
+
+	ftrv		xmtrx,fv0
+	fmov		@r4+,fr4  ! u
+	fmov		@r4+,fr5  ! v
+!	nop
+	fmov		@r4+,fr6  ! argb
+!	nop
+	fmov		@r4+,fr7  ! oargb
+!	nop
+!   nop nop
+
+	fdiv		fr3,fr9
+	add         #-32,r4
+
+	! store a vector
+	
+	fmov		@r4,fr8   ! flags
+	add         #32,r4
+	fmov		fr7, @-r5 ! oargb
+	fmov		fr6, @-r5 ! argb
+	fmov		fr5, @-r5 ! v
+	fmov		fr4, @-r5 ! u
+
+	pref        @r4
+	add         #4,r4
+	dt			r6
+	! nop
+	! 5x nop nop
+
+	fmul		fr9,fr1
+	fmul		fr9,fr0
+!	nop
+
+	fmov		fr9,@-r5   ! z (1/w)
+	fmov		fr1,@-r5   ! y
+	fmov		fr0,@-r5   ! x
+	fmov		fr8,@-r5   ! flags
+	pref		@r5
+	add			#32,r5
+
+	bf/s		.loop1
+	fldi1		fr9
+
+	rts
+	nop
+

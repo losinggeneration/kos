@@ -30,6 +30,16 @@ void mat_apply(matrix_t *src);
    matrix. Each vector is three floats long. */
 void mat_transform(vector_t *invecs, vector_t *outvecs, int veccnt, int vecskip);
 
+/* Transform zero or more sets of vertices using the current internal
+   matrix, directly to the store queues. Each vertex is 32 bytes long.
+   All non-xyz data will be copied over along with the transformed
+   coordinates. Minimum number of vertices: 1.
+
+   Note taht the QACRx registers must have already been set.
+
+   This was contributed by Jim Ursetto. */
+void mat_transform_sq(void * input, void * output, int veccnt);
+
 /* Inline mat_transform which works on the three coordinates passed in;
    this works most efficiently if you've already got the three numbers
    (x,y,z) in the right registers (fr0,fr1,fr2). */
