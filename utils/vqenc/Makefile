@@ -2,7 +2,7 @@
 # Makefile for the genromfs program.
 
 CFLAGS = -O2 -Wall -DINLINE=inline #-g#
-LDFLAGS = -s -lpng -ljpeg #-g
+LDFLAGS = -s -lpng -ljpeg -lz #-g
 
 all: vqenc
 
