@@ -9,6 +9,7 @@
             
 #include <assert.h>
 #include <png.h>
+#include <stdlib.h>
 #include "readpng.h"
 #include "get_image.h"
 
