@@ -177,7 +177,7 @@ int spu_dma_init() {
 
 	// Hook the interrupt
 	asic_evt_set_handler(ASIC_EVT_SPU_DMA, spu_dma_irq);
-	asic_evt_enable(ASIC_EVT_PVR_DMA, ASIC_IRQ_DEFAULT);
+	asic_evt_enable(ASIC_EVT_SPU_DMA, ASIC_IRQ_DEFAULT);
 
 	/* Setup the DMA transfer on the external side */
 	extdma->wait_state = 27;
@@ -188,7 +188,7 @@ int spu_dma_init() {
 
 void spu_dma_shutdown() {
 	// Unhook the G2 interrupt
-	asic_evt_disable(ASIC_EVT_PVR_DMA, ASIC_IRQ_DEFAULT);
+	asic_evt_disable(ASIC_EVT_SPU_DMA, ASIC_IRQ_DEFAULT);
 	asic_evt_set_handler(ASIC_EVT_SPU_DMA, NULL);
 
 	/* Destroy the semaphore */
