@@ -51,6 +51,8 @@ extern int dcload_type;
 #define DCLOAD_OPENDIR 16
 #define DCLOAD_CLOSEDIR 17
 #define DCLOAD_READDIR 18
+#define DCLOAD_GETHOSTINFO 19
+#define DCLOAD_GDBPACKET 20
 
 /* dcload syscall function */
 
@@ -94,6 +96,9 @@ typedef struct dcload_stat dcload_stat_t;
 
 /* Printk replacement */
 void dcload_printk(const char *str);
+
+/* GDB tunnel */
+size_t dcload_gdbpacket(const char* in_buf, size_t in_size, char* out_buf, size_t out_size);
 
 /* File functions */
 uint32	dcload_open(vfs_handler_t * vfs, const char *fn, int mode);

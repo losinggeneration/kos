@@ -42,6 +42,7 @@ uint32	dcln_tool_ip;
 uint8	dcln_tool_mac[6];
 uint16	dcln_tool_port;
 int	dcln_syscall_retval;
+unsigned char *dcln_syscall_data;
 int	dcln_escape_loop;
 
 // #define DEBUG
@@ -57,9 +58,8 @@ typedef struct {
 static void get_tool_ip() {
 	hostinfo_t hi;
 
-	/* Call down to dcload-ip to get the tool IP/port. This syscall
-   	is undocumented but works. */
-	dcloadsyscall(DCLOAD_READDIR+1, &hi);
+	/* Call down to dcload-ip to get the tool IP/port. */
+	dcloadsyscall(DCLOAD_GETHOSTINFO, &hi);
 
 	dcln_tool_ip = hi.toolip;
 	dcln_tool_port = hi.toolport;

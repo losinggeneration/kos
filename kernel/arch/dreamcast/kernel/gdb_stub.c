@@ -147,6 +147,7 @@
 	"0* " means the same as "0000".  */
 
 #include <dc/scif.h>
+#include <dc/fs_dcload.h>
 #include <arch/gdb.h>
 #include <arch/types.h>
 #include <arch/irq.h>
@@ -197,6 +198,14 @@
 #define NUMREGBYTES	41*4
 
 /*
+ * Modes for packet dcload packet transmission
+ */
+
+#define DCL_SEND       0x1
+#define DCL_RECV       0x2
+#define DCL_SENDRECV   0x3
+
+/*
  * typedef
  */
 typedef void (*Function) ();
@@ -215,8 +224,7 @@ static int computeSignal (int exceptionVector);
 
 static void putDebugChar (char);
 static char getDebugChar (void);
-
-
+static void flushDebugChannel (void);
 
 void gdb_breakpoint(void);
 
@@ -270,8 +278,10 @@ static uint32 *registers;
 static stepData instrBuffer;
 static char stepped;
 static const char hexchars[] = "0123456789abcdef";
-static char remcomInBuffer[BUFMAX];
-static char remcomOutBuffer[BUFMAX];
+static char remcomInBuffer[BUFMAX], remcomOutBuffer[BUFMAX];
+
+static char in_dcl_buf[BUFMAX], out_dcl_buf[BUFMAX];
+static int using_dcl = 0, in_dcl_pos = 0, out_dcl_pos = 0, in_dcl_size = 0;
 
 static char highhex(int  x)
 {
@@ -493,6 +503,7 @@ putpacket (register char *buffer)
       putDebugChar ('#');
       putDebugChar (highhex(checksum));
       putDebugChar (lowhex(checksum));
+      flushDebugChannel ();
     }
   while  (getDebugChar() != '+');
 }
@@ -511,11 +522,11 @@ computeSignal (int exceptionVector)
     case EXC_ILLEGAL_INSTR:
     case EXC_SLOT_ILLEGAL_INSTR:
       sigval = 4;
-      break;			
+      break;
     case EXC_DATA_ADDRESS_READ:
     case EXC_DATA_ADDRESS_WRITE:
       sigval = 10;
-      break;	
+      break;
 
     case EXC_TRAPA:
       sigval = 5;
@@ -780,23 +791,54 @@ gdb_breakpoint (void)
 }
 
 
-static char 
+static char
 getDebugChar (void)
 {
   int ch;
 
-  /* Spin while nothing is available. */
-  while((ch = scif_read()) < 0);
+  if (using_dcl) {
+    if (in_dcl_pos >= in_dcl_size) {
+      in_dcl_size = dcload_gdbpacket(NULL, 0, in_dcl_buf, BUFMAX);
+      in_dcl_pos = 0;
+    }
+    ch = in_dcl_buf[in_dcl_pos++];
+  } else {
+    /* Spin while nothing is available. */
+    while((ch = scif_read()) < 0);
+    ch &= 0xff;
+  }
 
-  return (ch & 0xff);
+  return ch;
 }
 
 static void
 putDebugChar (char ch)
 {
-  /* write the char and flush it. */
-  scif_write(ch);
-  scif_flush();
+  if (using_dcl) {
+    out_dcl_buf[out_dcl_pos++] = ch;
+    if (out_dcl_pos >= BUFMAX) {
+      dcload_gdbpacket(out_dcl_buf, out_dcl_pos, NULL, 0);
+      out_dcl_pos = 0;
+    }
+  } else {
+    /* write the char and flush it. */
+    scif_write(ch);
+    scif_flush();
+  }
+}
+
+static void
+flushDebugChannel ()
+{
+  /* send the current complete packet and wait for a response */
+  if (using_dcl) {
+    if (in_dcl_pos >= in_dcl_size) {
+      in_dcl_size = dcload_gdbpacket(out_dcl_buf, out_dcl_pos, in_dcl_buf, BUFMAX);
+      in_dcl_pos = 0;
+    } else
+      dcload_gdbpacket(out_dcl_buf, out_dcl_pos, NULL, 0);
+    out_dcl_pos = 0;
+  }
 }
 
 static void handle_exception(irq_t code, irq_context_t *context) {
@@ -822,7 +864,11 @@ static void handle_gdb_trapa(irq_t code, irq_context_t *context) {
 }
 
 void gdb_init() {
-  scif_set_parameters(57600, 1);
+  if (dcload_gdbpacket(NULL, 0, NULL, 0) == 0)
+    using_dcl = 1;
+  else
+    scif_set_parameters(57600, 1);
+
   irq_set_handler(EXC_ILLEGAL_INSTR, handle_exception);
   irq_set_handler(EXC_SLOT_ILLEGAL_INSTR, handle_exception);
   irq_set_handler(EXC_DATA_ADDRESS_READ, handle_exception);
@@ -830,5 +876,6 @@ void gdb_init() {
 
   trapa_set_handler(32, handle_gdb_trapa);
   trapa_set_handler(255, handle_user_trapa);
+
   BREAKPOINT();
 }

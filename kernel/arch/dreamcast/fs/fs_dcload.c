@@ -76,6 +76,22 @@ int dcload_read_cons() {
     return -1;
 }
 
+size_t dcload_gdbpacket(const char* in_buf, size_t in_size, char* out_buf, size_t out_size) {
+    size_t ret = -1;
+
+    if (lwip_dclsc && irq_inside_int())
+      return 0;
+
+    spinlock_lock(&mutex);
+
+    /* we have to pack the sizes together because the dcloadsyscall handler
+       can only take 4 parameters */
+  	ret = dclsc(DCLOAD_GDBPACKET, in_buf, (in_size << 16) | (out_size & 0xffff), out_buf);
+
+    spinlock_unlock(&mutex);
+    return ret;
+}
+
 static char *dcload_path = NULL;
 uint32 dcload_open(vfs_handler_t * vfs, const char *fn, int mode) {
     int hnd = 0;
@@ -306,6 +322,8 @@ int dcload_unlink(vfs_handler_t * vfs, const char *fn) {
     spinlock_unlock(&mutex);
     return ret;
 }
+
+
 
 /* Pull all that together */
 static vfs_handler_t vh = {

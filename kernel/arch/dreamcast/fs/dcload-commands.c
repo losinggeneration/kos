@@ -157,5 +157,6 @@ void dcln_cmd_retval(ip_header_t * ip, udp_header_t * udp, command_t * command)
 	dcln_tx(dcln_pkt_buf, ETHER_H_LEN + IP_H_LEN + UDP_H_LEN + COMMAND_LEN);
 
 	dcln_syscall_retval = ntohl(command->address);
+	dcln_syscall_data = command->data;
 	dcln_escape_loop = 1;
 }

@@ -38,8 +38,10 @@ __BEGIN_DECLS
 #define DCLN_CMD_CLOSEDIR "DC17"
 #define DCLN_CMD_READDIR  "DC18"
 #define DCLN_CMD_CDFSREAD "DC19"
+#define DCLN_CMD_GDBPACKET "DC20"
 
 extern int dcln_syscall_retval;
+extern unsigned char *dcln_syscall_data;
 
 typedef struct {
   unsigned char id[4] __attribute__ ((packed));
@@ -94,6 +96,7 @@ int dcln_stat(const char *file_name, dcload_stat_t *buf);
 int dcln_opendir(const char *name);
 int dcln_closedir(int dir);
 dcload_dirent_t *dcln_readdir(int dir);
+size_t dcln_gdbpacket(const char *in_buf, size_t in_size, char *out_buf, size_t out_size);
 
 __END_DECLS
 

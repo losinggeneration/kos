@@ -257,3 +257,18 @@ dcload_dirent_t *dcln_readdir(int dir)
 	return 0;
 }
 	
+size_t dcln_gdbpacket(const char *in_buf, size_t in_size, char *out_buf, size_t out_size)
+{
+    command_2int_string_t * command = (command_2int_string_t *)(pkt_buf + ETHER_H_LEN + IP_H_LEN + UDP_H_LEN);
+
+    memcpy(command->id, CMD_GDBPACKET, 4);
+    command->value0 = htonl(in_size);
+    command->value1 = htonl(out_size);
+    memcpy(command->string, in_buf, in_size);
+    dcln_build_send_packet(sizeof(command_2int_string_t)-1 + in_size);
+    dcln_rx_loop();
+
+    memcpy(out_buf, dcln_syscall_data, dcln_syscall_retval);
+
+    return dcln_syscall_retval;
+}
