@@ -11,11 +11,55 @@
 #include <dc/net/broadband_adapter.h>
 #include <dc/asic.h>
 #include <dc/g2bus.h>
+#include <dc/sq.h>
 #include <arch/irq.h>
+#include <arch/cache.h>
 #include <kos/net.h>
 #include <kos/thread.h>
+#include <kos/sem.h>
 
 CVSID("$Id: broadband_adapter.c,v 1.3 2003/07/22 03:31:58 bardtx Exp $");
+
+//#define vid_border_color(r, g, b) (void)0 /* nothing */
+
+/* Configuration definitions */
+
+#define RTL_MEM                 (0x1840000)
+
+#define RX_BUFFER_LEN_SHIFT     1 /* 0 : 8Kb, 1 : 16Kb, 2 : 32Kb, 3 : 64Kb */
+
+#define RX_NOWRAP               (1<<7) /* or 0 to use wrapping mode */
+#define RX_CONFIG               RX_NOWRAP | (0<<24) | (0<<13) | (6<<8) | (RX_BUFFER_LEN_SHIFT<<11)
+
+#define TX_CONFIG               (6<<8) /* 0x00000600 */
+
+#define RX_BUFFER_LEN		(8192<<RX_BUFFER_LEN_SHIFT)
+
+#define TX_BUFFER_OFFSET        (RX_BUFFER_LEN + 0x2000)
+#define TX_NB_BUFFERS           4
+
+/* original value */
+//#define BBA_ASIC_IRQ ASIC_IRQB
+
+/* testing */
+#define BBA_ASIC_IRQ ASIC_IRQ_DEFAULT
+
+/* Use a customized g2_read_block function */
+#define FAST_G2_READ
+
+/* DMA transfer will be used only if the amount of bytes exceeds that threshold */
+#define DMA_THRESHOLD 128 // looks like a good value
+
+/* Since callbacks will be running with interrupts enabled,
+   it might be a good idea to protect bba_tx with a semaphore from inside.
+   I'm not sure lwip needs that, but dcplaya does when using both lwip and its
+   own dcload syscalls emulation.*/
+#define TX_SEMA
+
+/* If this is defined, the dma buffer will be located in P2 area, and no call to 
+   dcache_inval_range need to be done before receiving data.
+   TODO : make some benchmark to see which method is faster */
+//#define USE_P2_AREA
 
 /*
 
@@ -70,8 +114,8 @@ static int gaps_init() {
 	}
 	g2_write_32(GAPS_BASE + 0x1420, 0x01000000);
 	g2_write_32(GAPS_BASE + 0x1424, 0x01000000);
-	g2_write_32(GAPS_BASE + 0x1428, 0x01840000);		/* DMA Base */
-	g2_write_32(GAPS_BASE + 0x142c, 0x01840000 + 32*1024);	/* DMA End */
+	g2_write_32(GAPS_BASE + 0x1428, RTL_MEM);		/* DMA Base */
+	g2_write_32(GAPS_BASE + 0x142c, RTL_MEM + 32*1024);	/* DMA End */
 	g2_write_32(GAPS_BASE + 0x1414, 0x00000001);		/* Interrupt enable */
 	g2_write_32(GAPS_BASE + 0x1434, 0x00000001);
 
@@ -95,9 +139,6 @@ static int gaps_init() {
 /****************************************************************************/
 /* RTL8193C stuff */
 
-/* Configuration definitions */
-#define RX_BUFFER_LEN		16384
-
 /* RTL8139C Config/Status info */
 struct {
 	uint16	cur_rx;		/* Current Rx read ptr */
@@ -109,16 +150,15 @@ struct {
 #define NIC(ADDR) (0xa1001700 + (ADDR))
 
 /* 8 and 32 bit access to the PCI MEMMAP space (configured by GAPS) */
-static uint32 const rtl_mem = 0xa1840000;
+static uint32 const rtl_mem = 0xa0000000 + RTL_MEM;
 
 /* TX buffer pointers */
-static uint32 const txdesc[4] = {	0xa1846000,
-					0xa1846800,
-					0xa1847000,
-					0xa1847800 };
-
-/* Receive buffer: temporary space to copy out received data */
-static uint8 rxbuff[1600];
+static uint32 const txdesc[4] = {
+	0xa0000000+RTL_MEM+TX_BUFFER_OFFSET,
+	0xa0000800+RTL_MEM+TX_BUFFER_OFFSET,
+	0xa0001000+RTL_MEM+TX_BUFFER_OFFSET,
+	0xa0001800+RTL_MEM+TX_BUFFER_OFFSET,
+};
 
 /* Is the link stabilized? */
 static volatile int link_stable, link_initial;
@@ -213,10 +253,12 @@ static int bba_hw_init() {
 	/* nic32[RT_RXCONFIG/4] = 0x0000c600; */
 
 	/* Set Rx FIFO threashold to 1K, Rx size to 8k, 1024 byte DMA burst */
-	g2_write_32(NIC(RT_RXCONFIG), 0x00000e00);
+/*  	g2_write_32(NIC(RT_RXCONFIG), 0x0000c600); */
+	//g2_write_32(NIC(RT_RXCONFIG), 0x00000e00);
+	g2_write_32(NIC(RT_RXCONFIG), RX_CONFIG);
 	
 	/* Set Tx 1024 byte DMA burst */
-	g2_write_32(NIC(RT_TXCONFIG), 0x00000600);
+	g2_write_32(NIC(RT_TXCONFIG), TX_CONFIG);
 
 	/* Turn off lan-wake and set the driver-loaded bit */
 	g2_write_8(NIC(RT_CONFIG1), (g2_read_8(NIC(RT_CONFIG1)) & ~0x30) | 0x20);
@@ -228,11 +270,12 @@ static int bba_hw_init() {
 	g2_write_8(NIC(RT_CFG9346), 0);
 	
 	/* Setup RX/TX buffers */
-	g2_write_32(NIC(RT_RXBUF), 0x01840000);
-	g2_write_32(NIC(RT_TXADDR0 + 0), 0x01846000);
-	g2_write_32(NIC(RT_TXADDR0 + 4), 0x01846800);
-	g2_write_32(NIC(RT_TXADDR0 + 8), 0x01847000);
-	g2_write_32(NIC(RT_TXADDR0 + 12), 0x01847800);
+	g2_write_32(NIC(RT_RXBUF), RTL_MEM);
+
+	g2_write_32(NIC(RT_TXADDR0 + 0),  RTL_MEM+TX_BUFFER_OFFSET);
+	g2_write_32(NIC(RT_TXADDR0 + 4),  RTL_MEM+0x0800+TX_BUFFER_OFFSET);
+	g2_write_32(NIC(RT_TXADDR0 + 8),  RTL_MEM+0x1000+TX_BUFFER_OFFSET);
+	g2_write_32(NIC(RT_TXADDR0 + 12), RTL_MEM+0x1800+TX_BUFFER_OFFSET);
 
 	/* Reset RXMISSED counter */
 	g2_write_32(NIC(RT_RXMISSED), 0);
@@ -249,7 +292,7 @@ static int bba_hw_init() {
 
 	/* Enable G2 interrupts */
 	asic_evt_set_handler(ASIC_EVT_EXP_PCI, bba_irq_hnd);
-	asic_evt_enable(ASIC_EVT_EXP_PCI, ASIC_IRQB);
+	asic_evt_enable(ASIC_EVT_EXP_PCI, BBA_ASIC_IRQ);
 
 	/* Enable receive interrupts */
 	/* XXX need to handle more! */
@@ -281,12 +324,14 @@ static void rx_reset() {
 	rtl.cur_rx = 0;
 	g2_write_8(NIC(RT_CHIPCMD), RT_CMD_TX_ENABLE);
 
-	g2_write_32(NIC(RT_RXCONFIG), 0x00000e0a);
+	//g2_write_32(NIC(RT_RXCONFIG), 0x00000e0a);
+	g2_write_32(NIC(RT_RXCONFIG), RX_CONFIG | 0x0000000a );
 
 	while (!(g2_read_8(NIC(RT_CHIPCMD)) & RT_CMD_RX_ENABLE))
 		g2_write_8(NIC(RT_CHIPCMD), RT_CMD_TX_ENABLE | RT_CMD_RX_ENABLE);
 
-	g2_write_32(NIC(RT_RXCONFIG), 0x00000e0a);
+	//g2_write_32(NIC(RT_RXCONFIG), 0x00000e0a);
+	g2_write_32(NIC(RT_RXCONFIG), RX_CONFIG | 0x0000000a );
 	g2_write_16(NIC(RT_INTRSTATUS), 0xffff);
 }
 
@@ -295,46 +340,390 @@ static void bba_hw_shutdown() {
 	g2_write_32(NIC(RT_RXCONFIG), 0);
 
 	/* Disable G2 interrupts */
-	asic_evt_disable(ASIC_EVT_EXP_PCI, ASIC_IRQB);
+	asic_evt_disable(ASIC_EVT_EXP_PCI, BBA_ASIC_IRQ);
 	asic_evt_set_handler(ASIC_EVT_EXP_PCI, NULL);
 }
 
-/* Utility function to copy out a packet from the ring buffer into an SH-4
+
+//#define g2_read_block_8(a, b, len) memcpy(a, b, len)
+//#define g2_read_block_8(a, b, len) memcpy4(a, b, (len) + 3)
+//#define g2_read_block_8(a, b, len) sq_cpy(a, b, (len) + 31)
+//#define g2_read_block_8(a, b, len) g2_read_block_32(a, b, ((len)+3) >> 2)
+#ifdef FAST_G2_READ
+#define g2_read_block_8 my_g2_read_block_8
+
+/*
+   G2 bus cycles must not be interrupted by IRQs or G2 DMA.
+   The following paired macros will take the necessary precautions.
+ */
+
+#define DMAC_CHCR1 *((vuint32 *)0xffa0001c)
+#define DMAC_CHCR3 *((vuint32 *)0xffa0003c)
+
+#if 0
+
+/* this version stores also CHCR1 state and stop it, doesn't seem to make 
+   any difference so I removed it for now */
+#define G2_LOCK(OLD1, OLD2) \
+	do { \
+		OLD1 = irq_disable(); \
+		/* suspend any G2 DMA here... */ \
+		OLD2 = (DMAC_CHCR3&0xffff) + (DMAC_CHCR1 <<16); \
+		DMAC_CHCR3 = (OLD2&0xffff) & ~1; \
+		DMAC_CHCR1 = (OLD2>>16) & ~1; \
+		while((*(vuint32 *)0xa05f688c) & 0x20) \
+			; \
+	} while(0)
+
+#define G2_UNLOCK(OLD1, OLD2) \
+	do { \
+		/* resume any G2 DMA here... */ \
+		DMAC_CHCR3 = (OLD2&0xffff); \
+		DMAC_CHCR1 = (OLD2>>16); \
+		irq_restore(OLD1); \
+	} while(0)
+
+#else
+
+#define G2_LOCK(OLD1, OLD2) \
+	do { \
+		OLD1 = irq_disable(); \
+		/* suspend any G2 DMA here... */ \
+		OLD2 = DMAC_CHCR3; \
+		DMAC_CHCR3 = OLD2 & ~1; \
+		while((*(vuint32 *)0xa05f688c) & 0x20) \
+			; \
+	} while(0)
+
+#define G2_UNLOCK(OLD1, OLD2) \
+	do { \
+		/* resume any G2 DMA here... */ \
+		DMAC_CHCR3 = OLD2; \
+		irq_restore(OLD1); \
+	} while(0)
+#endif
+
+static void g2_read_block_8(uint8 *dst, uint8 *src, int len) {
+	if (len <= 0)
+		return;
+
+	uint32 old1, old2;
+  
+	G2_LOCK(old1, old2);
+
+  /* This is in case dst is not multiple of 4, which never happens here */
+/*     while ( (((uint32)dst)&3) ) { */
+/*       *dst++ = *src++; */
+/*       if (!--len) */
+/* 	return; */
+/*     } */
+
+	uint32 * d = (uint32 *) dst;
+	uint32 * s = (uint32 *) src;
+	len = (len+3) >> 2;
+  
+	while ( len&7 ) {
+		*d++ = *s++;
+		--len;
+	}
+  
+	if (!len)
+		return;
+  
+	len >>= 3;
+	do {
+		d[0] = *s++;
+		d[1] = *s++;
+		d[2] = *s++;
+		d[3] = *s++;
+		d[4] = *s++;
+		d[5] = *s++;
+		d[6] = *s++;
+		d[7] = *s++;
+		d += 8;
+	} while(--len);
+  
+	G2_UNLOCK(old1, old2);
+}
+#endif
+
+
+#define RXBSZ    (64*1024) /* must be a power of two */
+#define MAX_PKTS (RXBSZ / 32)
+static struct pkt {
+	int pkt_size;
+	uint8 * rxbuff;
+} rx_pkt[MAX_PKTS];
+
+#define BEFORE 0 // 32*1024
+#define AFTER  0 // (BEFORE + 32*1024)
+
+static uint8 rxbuff[RXBSZ+2*1600 + AFTER] __attribute__((aligned(32)));
+static uint32 rxbuff_pos;
+static int rxin;
+static int rxout;
+static int dma_used;
+
+static uint32 rx_size;
+
+static semaphore_t * bba_rx_sema;
+static int bba_rx_exit_thread;
+static semaphore_t * bba_rx_sema2;
+
+static void bba_rx();
+
+#ifdef TX_SEMA
+static semaphore_t * tx_sema;
+#endif
+
+static uint8 * next_dst;
+static uint8 * next_src;
+static int next_len;
+
+static void rx_finish_enq(int room) {
+	/* Tell the chip where we are for overflow checking */
+	rtl.cur_rx = (rtl.cur_rx + rx_size + 4 + 3) & ~3;
+	g2_write_16(NIC(RT_RXBUFTAIL), (rtl.cur_rx - 16) & (RX_BUFFER_LEN - 1));
+
+	if (room > 0 && (((rxin + 1) % MAX_PKTS) != rxout)) {
+		rxin = (rxin + 1) % MAX_PKTS;
+		sem_signal(bba_rx_sema);
+		thd_schedule(1, 0);
+	} else
+		;//dbglog(DBG_KDEBUG, "rx_finish_enq: lagging\n");
+}
+
+static void bba_dma_cb(ptr_t p) {
+	if (next_len) {
+		g2_dma_transfer(next_dst, next_src, next_len, 0,
+			bba_dma_cb, 0,	/* callback */
+			1,	/* dir = 1, we're *reading* from the g2 bus */
+			BBA_DMA_MODE, BBA_DMA_G2CHN, BBA_DMA_SHCHN);
+		next_len = 0;
+	} else {
+		rx_finish_enq(1);
+
+		dma_used = 0;
+
+		bba_rx();
+	}
+}
+
+static int bba_copy_dma(uint8 * dst, uint32 s, int len) {
+	uint8 *src = (uint8 *) s;
+
+	if (len <= 0)
+		return 1;
+
+	if (len > DMA_THRESHOLD) {
+		uint32 add;
+
+		/*
+		   This way all will be nicely 32 bytes aligned (assuming that dst and src have
+		   same alignement initially and that we don't care about the beginning of dst
+		   buffer)
+		*/
+		add = ((uint32) src) & 31;
+		len += add;
+		src -= add;
+		dst -= add;
+
+#ifndef USE_P2_AREA
+		/*
+		   used to be a call to dcache_inval_range, but for some strange reasons, I need to
+		   make a full flush now ...
+		*/
+		dcache_flush_range((uint32) dst, len);
+#endif
+
+		if (!dma_used) {
+			dma_used = 1;
+			g2_dma_transfer(dst, src, len, 0,
+				bba_dma_cb, 0,	/* callback */
+				1,	/* dir = 1, we're *reading* from the g2 bus */
+				BBA_DMA_MODE, BBA_DMA_G2CHN, BBA_DMA_SHCHN);
+		} else {
+			next_dst = dst;
+			next_src = src;
+			next_len = len;
+		}
+		return 0;
+	} else {
+		g2_read_block_8(dst, src, len);
+		return !dma_used;
+	}
+}
+#undef g2_read_block_8
+
+/* Utility function to copy out a some data from the ring buffer into an SH-4
    buffer. This is done to make sure the buffers don't overflow. */
 /* XXX Could probably use a memcpy8 here, even */
-static void bba_copy_packet(uint8 *dst, uint32 src, int len) {
-	if ( (src+len) < RX_BUFFER_LEN ) {
+static int  bba_copy_packet(uint8 * dst, uint32 src, int len) {
+
+#if !RX_NOWRAP
+	if ((src + len) < RX_BUFFER_LEN) {
+#endif
 		/* Straight copy is ok */
-		g2_read_block_8(dst, rtl_mem+src, len);
+		return bba_copy_dma(dst, rtl_mem + src, len);
+#if !RX_NOWRAP
 	} else {
 		/* Have to copy around the ring end */
-		g2_read_block_8(dst, rtl_mem+src, RX_BUFFER_LEN - src);
-		g2_read_block_8(dst+(RX_BUFFER_LEN - src),
-			rtl_mem, len - (RX_BUFFER_LEN - src));
+		bba_copy_dma(dst, rtl_mem + src, RX_BUFFER_LEN - src);
+
+		return bba_copy_dma(dst + (RX_BUFFER_LEN - src),
+				    rtl_mem, len - (RX_BUFFER_LEN - src));
 	}
+#endif
 }
 
-/* Copy one received packet out of the RX DMA space and into the RX buffer */
-static void rx_enq(int ring_offset, int pkt_size) {
+static int rx_enq(int ring_offset, int pkt_size) {
 	/* If there's no one to receive it, don't bother. */
 	if (eth_rx_callback) {
-		/* Copy it out */
-		bba_copy_packet(rxbuff, ring_offset, pkt_size);
+		if (rxin != rxout &&
+			(((rx_pkt[rxout].rxbuff - (rxbuff + 32 + BEFORE)) - rxbuff_pos) & (RXBSZ - 1)) < pkt_size + 2048)
+		{
+/*       printf("diff %d, %d\n", (( (rx_pkt[rxout].rxbuff - rxbuff) - rxbuff_pos ) & (RXBSZ-1)), */
+/* 	     pkt_size); */
+			//dbglog(DBG_KDEBUG, "rx_enq: lagging\n");
+			return -1;
+		}
+		/* Receive buffer: temporary space to copy out received data */
 
-		/* Call the callback to process it */
-		eth_rx_callback(rxbuff, pkt_size);
-	}
+#ifdef USE_P2_AREA
+		rx_pkt[rxin].rxbuff = rxbuff + 32 + BEFORE + (rxbuff_pos | 0xa0000000) + (ring_offset & 31);
+#else
+		rx_pkt[rxin].rxbuff = rxbuff + 32 + BEFORE + rxbuff_pos + (ring_offset & 31);
+#endif
+
+
+		rxbuff_pos = (rxbuff_pos + pkt_size + 63) & (RXBSZ - 32);
+
+		rx_pkt[rxin].pkt_size = pkt_size;
+		return bba_copy_packet(rx_pkt[rxin].rxbuff, ring_offset, pkt_size);
+	} else
+		return 1;
 }
 
-/* "Receive" any available packets and send them through the callback. */
-static int bba_rx() {
-	int	processed;
-	uint32	rx_status;
-	int	rx_size, pkt_size, ring_offset, intr;
+/* Transmit a single packet */
+#ifdef TX_SEMA
+static int bba_rtx(const uint8 * pkt, int len, int wait)
+#else
+static int bba_tx(const uint8 * pkt, int len, int wait)
+#endif
+{
+	/*
+	   int i;
 	
-	processed = 0;
+	printf("Transmitting packet:\r\n"); for (i=0; i<len; i++) { printf("%02x ", pkt[i]); if (i
+	   && !(i % 16)) printf("\r\n"); } printf("\r\n");
+	*/
 
-	/* While we have frames left to process... */	
+	//wait = BBA_TX_WAIT;
+	if (!link_stable) {
+		if (wait == BBA_TX_WAIT) {
+			while (!link_stable)
+				;
+		} else
+			return BBA_TX_AGAIN;
+	}
+	/* Wait till it's clear to transmit */
+	if (wait == BBA_TX_WAIT) {
+		while (!(g2_read_32(NIC(RT_TXSTATUS0 + 4 * rtl.cur_tx)) & 0x2000)) {
+			if (g2_read_32(NIC(RT_TXSTATUS0 + 4 * rtl.cur_tx)) & 0x40000000)
+				g2_write_32(NIC(RT_TXSTATUS0 + 4 * rtl.cur_tx),
+					    g2_read_32(NIC(RT_TXSTATUS0 + 4 * rtl.cur_tx)) | 1);
+		}
+	} else {
+		if (!(g2_read_32(NIC(RT_TXSTATUS0 + 4 * rtl.cur_tx)) & 0x2000)) {
+			return BBA_TX_AGAIN;
+		}
+	}
+
+	/* Copy the packet out to RTL memory */
+	/* XXX could use store queues or memcpy8 here */
+
+	//g2_write_block_8(pkt, txdesc[rtl.cur_tx], len);
+
+	/* VP : g2_write_block_32 works here, use it , it's faster ! */
+	g2_write_block_32((uint32 *) pkt, txdesc[rtl.cur_tx], (len + 3) >> 2);
+
+	/* All packets must be at least 60 bytes */
+	if (len < 60)
+		len = 60;
+
+	/* Transmit from the current TX buffer */
+	g2_write_32(NIC(RT_TXSTATUS0 + 4 * rtl.cur_tx), len);
+
+	/* Go to the next TX buffer */
+	rtl.cur_tx = (rtl.cur_tx + 1) % TX_NB_BUFFERS;
+
+	return BBA_TX_OK;
+}
+
+#ifdef TX_SEMA
+int bba_tx(const uint8 * pkt, int len, int wait) {
+	int res;
+
+	if (irq_inside_int()) {
+/*     printf("bba_tx called from an irq !\n"); */
+/*     return 0; */
+		//return bba_rtx(pkt, len, wait);
+		if (sem_trywait(tx_sema)) {
+			//printf("bba_tx called from an irq while a thread was running it !\n");
+			return BBA_TX_OK;	/* sorry guys ... */
+		}
+	} else
+		sem_wait(tx_sema);
+	res = bba_rtx(pkt, len, wait);
+	sem_signal(tx_sema);
+
+	return res;
+}
+#endif
+
+void bba_lock() {
+	//sem_wait(bba_rx_sema2);
+	//asic_evt_disable(ASIC_EVT_EXP_PCI, BBA_ASIC_IRQ);
+}
+
+void bba_unlock() {
+	//asic_evt_enable(ASIC_EVT_EXP_PCI, BBA_ASIC_IRQ);
+	//sem_signal(bba_rx_sema2);
+}
+
+static int bcolor;
+static void bba_rx_thread(void *dummy) {
+	while (!bba_rx_exit_thread) {
+		//sem_wait_timed(bba_rx_sema, 500);
+		sem_wait(bba_rx_sema);
+		if (bba_rx_exit_thread)
+			break;
+
+		bcolor = 255;
+		//vid_border_color(255, 255, 0);
+		bba_lock();
+
+		if (rxout != rxin) {
+
+			/* Call the callback to process it */
+			eth_rx_callback(rx_pkt[rxout].rxbuff, rx_pkt[rxout].pkt_size);
+
+			rxout = (rxout + 1) % MAX_PKTS;
+		}
+		bcolor = 0;
+		//vid_border_color(0, 0, 0);
+		bba_unlock();
+	}
+	bba_rx_exit_thread = 0;
+
+	printf("bba_rx_thread exiting ...\n");
+}
+
+static void bba_rx() {
+	uint32 rx_status;
+	int pkt_size, ring_offset;
+
+	//vid_border_color(255, 0, 255);
 	while (!(g2_read_8(NIC(RT_CHIPCMD)) & 1)) {
 		/* Get frame size and status */
 		ring_offset = rtl.cur_rx % RX_BUFFER_LEN;
@@ -343,91 +732,39 @@ static int bba_rx() {
 		pkt_size = rx_size - 4;
 
 		if (rx_size == 0xfff0) {
-			dbglog(DBG_KDEBUG, "bba: early receive triggered\n");
+			//dbglog(DBG_KDEBUG, "bba: early receive triggered\n");
 			break;
 		}
-		
-		if (!(rx_status & 1)) {
-			dbglog(DBG_KDEBUG, "bba: frame receive error, status is %08lx; skipping\n", rx_status);
-		}
+/*     if ( ( ( g2_read_16(NIC(RT_RXBUFHEAD)) - ring_offset ) & (RX_BUFFER_LEN-1)) < */
+/* 	 ( (rx_size+4+3) & (RX_BUFFER_LEN-3-1) )) { */
+/*       //dbglog(DBG_KDEBUG, "bba: oops\n"); */
+/*       break; */
+/*     } */
 
 		if ((rx_status & 1) && (pkt_size <= 1514)) {
 			/* Add it to the rx queue */
-			rx_enq(ring_offset + 4, pkt_size);
+			int res = rx_enq(ring_offset + 4, pkt_size);
+			if (!res)
+				break;	/* will be finished in the dma callback */
+			else
+				rx_finish_enq(res);
 		} else {
+			if (!(rx_status & 1)) {
+				dbglog(DBG_KDEBUG, "bba: frame receive error, status is %08lx; skipping\n", rx_status);
+			}
 			dbglog(DBG_KDEBUG, "bba: bogus packet receive detected; skipping packet\n");
-		}
-
-		/* Tell the chip where we are for overflow checking */
-		rtl.cur_rx = (rtl.cur_rx + rx_size + 4 + 3) & ~3;
-		g2_write_16(NIC(RT_RXBUFTAIL), rtl.cur_rx - 16);
-
-		/* If the chip is expecting an ACK, give it an ACK */
-		intr = g2_read_16(NIC(RT_INTRSTATUS));
-		if (intr & RT_INT_RX_ACK)
-			g2_write_16(NIC(RT_INTRSTATUS), RT_INT_RX_ACK);
-
-		/* Increase our "processed" count */
-		processed++;
-	}
-	
-	return processed;
-}
-
-/* Transmit a single packet */
-int bba_tx(const uint8 *pkt, int len, int wait) {
-	/* int i;
-
-	printf("Transmitting packet:\r\n");
-	for (i=0; i<len; i++) {
-		printf("%02x ", pkt[i]);
-		if (i && !(i % 16))
-			printf("\r\n");
-	}
-	printf("\r\n"); */
-
-	if (!link_stable) {
-		if (wait == BBA_TX_WAIT) {
-			while (!link_stable)
-				;
-		} else
-			return BBA_TX_AGAIN;
-	}
-
-	/* Wait till it's clear to transmit */
-	if (wait == BBA_TX_WAIT) {
-		while ( !(g2_read_32(NIC(RT_TXSTATUS0 + 4*rtl.cur_tx)) & 0x2000) ) {
-			if (g2_read_32(NIC(RT_TXSTATUS0 + 4*rtl.cur_tx)) & 0x40000000)
-				g2_write_32(NIC(RT_TXSTATUS0 + 4*rtl.cur_tx),
-					g2_read_32(NIC(RT_TXSTATUS0 + 4*rtl.cur_tx)) | 1);
-		}
-	} else {
-		if ( !(g2_read_32(NIC(RT_TXSTATUS0 + 4*rtl.cur_tx)) & 0x2000) ) {
-			return BBA_TX_AGAIN;
+			rx_reset();
+			break;
 		}
 	}
-	
-	/* Copy the packet out to RTL memory */
-	/* XXX could use store queues or memcpy8 here */
-	/*if (len & 3) len = (len + 3) & ~3; */
-	g2_write_block_8(pkt, txdesc[rtl.cur_tx], len);
-	
-	/* All packets must be at least 60 bytes */
-	if (len < 60) len = 60;
-	
-	/* Transmit from the current TX buffer */
-	g2_write_32(NIC(RT_TXSTATUS0 + 4*rtl.cur_tx), len);
-	
-	/* Go to the next TX buffer */
-	rtl.cur_tx = (rtl.cur_tx + 1) % 4;
-
-	return BBA_TX_OK;
+	//vid_border_color(bcolor, bcolor, 0);
 }
 
 /* Ethernet IRQ handler */
 static void bba_irq_hnd(uint32 code) {
 	int intr, hnd;
 
+	//vid_border_color(0, 255, 0);
 	/* Acknowledge 8193 interrupt, except RX ACK bits. We'll handle
 	   those in the RX int handler. */
 	intr = g2_read_16(NIC(RT_INTRSTATUS));
@@ -436,7 +773,14 @@ static void bba_irq_hnd(uint32 code) {
 	/* Do processing */
 	hnd = 0;
 	if (intr & RT_INT_RX_ACK) {
-		bba_rx(); hnd = 1;
+
+		if (!dma_used) {
+			bba_rx();
+		}
+		/* so that the irq is not called again and again */
+		g2_write_16(NIC(RT_INTRSTATUS), RT_INT_RX_ACK);
+
+		hnd = 1;
 	}
 	if (intr & RT_INT_TX_OK) {
 		hnd = 1;
@@ -485,9 +829,17 @@ static void bba_irq_hnd(uint32 code) {
 		rx_reset();
 		hnd = 1;
 	}
-	if (!hnd) {
-		dbglog(DBG_KDEBUG, "bba: spurious interrupt, status is %04x\n", intr);
+
+	// DMA complete ? doesn't look like, then what ? anyway, ignore it for now ...
+	if (intr == 0) {
+		hnd = 1;
 	}
+
+	if (!hnd) {
+		dbglog(DBG_KDEBUG, "bba: spurious interrupt, status is %08x\n", intr);
+	}
+
+	//vid_border_color(0, 0, 0);
 }
 
 /****************************************************************************/
@@ -597,6 +949,17 @@ int bba_init() {
 	/* Use the netcore callback */
 	bba_set_rx_callback(bba_if_netinput);
 
+#ifdef TX_SEMA
+	tx_sema = sem_create(1);
+#endif
+
+	/* VP : Initialize rx thread */
+	bba_rx_sema = sem_create(0);
+	bba_rx_sema2 = sem_create(1);
+	kthread_t * thd = thd_create(bba_rx_thread, 0);
+	thd->prio = 1;
+	thd_set_label(thd, "BBA-rx-thd");
+
 	/* Setup the structure */
 	bba_if.name = "bba";
 	bba_if.descr = "Broadband Adapter (HIT-0400)";
@@ -638,7 +1001,7 @@ int bba_init() {
 
 /* Shutdown */
 int bba_shutdown() {
-#if 0
+#if 1
 	/* Unregister us (if neccessary) */
 	net_unreg_device(&bba_if);
 #endif
@@ -646,7 +1009,20 @@ int bba_shutdown() {
 	/* Shutdown hardware */
 	bba_if.if_stop(&bba_if);
 	bba_if.if_shutdown(&bba_if);
-	
+
+	/* VP : Shutdown rx thread */
+	bba_rx_exit_thread = 1;
+	sem_signal(bba_rx_sema);
+	sem_signal(bba_rx_sema2);
+	while (bba_rx_exit_thread)
+	  thd_pass();
+	sem_destroy(bba_rx_sema);
+	sem_destroy(bba_rx_sema2);
+
+#ifdef TX_SEMA
+	sem_destroy(tx_sema);
+#endif
+
 	return 0;
 }
 

@@ -43,8 +43,14 @@ __BEGIN_DECLS
 #define ASIC_EVT_MAPLE_ERROR		0x000d		/* Maple error (?) */
 
 /* Event codes for the SPU */
-#define ASIC_EVT_SPU_DMA		0x000f		/* SPU DMA complete */
+#define ASIC_EVT_SPU_DMA		0x000f		/* SPU (G2 chnl 0) DMA complete */
 #define ASIC_EVT_SPU_IRQ		0x0101		/* SPU interrupt */
+
+/* Event codes for G2 bus DMA */
+#define ASIC_EVT_G2_DMA0		0x000f		/* G2 DMA chnl 0 complete */
+#define ASIC_EVT_G2_DMA1		0x0010		/* G2 DMA chnl 1 complete */
+#define ASIC_EVT_G2_DMA2		0x0011		/* G2 DMA chnl 2 complete */
+#define ASIC_EVT_G2_DMA3		0x0012		/* G2 DMA chnl 3 complete */
 
 /* Event codes for the external port */
 #define ASIC_EVT_EXP_8BIT		0x0102		/* Modem / Lan Adapter */

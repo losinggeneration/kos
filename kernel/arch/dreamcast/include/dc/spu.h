@@ -14,6 +14,7 @@
 __BEGIN_DECLS
 
 #include <arch/types.h>
+#include <dc/g2bus.h>
 
 /* Waits for the sound FIFO to empty */
 void spu_write_wait();
@@ -30,7 +31,7 @@ void spu_memset(uint32 to, uint32 what, int length);
    boundaries. If block is non-zero, this function won't return until
    the transfer is complete. If callback is non-NULL, it will be called
    upon completion (in an interrupt context!). Returns <0 on error. */
-typedef void (*spu_dma_callback_t)(ptr_t data);
+typedef g2_dma_callback_t spu_dma_callback_t;
 int spu_dma_transfer(void * from, uint32 dest, uint32 length, int block,
 	spu_dma_callback_t callback, ptr_t cbdata);
 
