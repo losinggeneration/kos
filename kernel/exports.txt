@@ -3,7 +3,9 @@
 # platform independent pieces (like basic timers). Truly arch-specific
 # things will go in another file (kernel/arch/xxx/exports.txt).
 
-# Memory management stuff
+# Libc ###############################
+
+# Malloc
 malloc
 calloc
 free
@@ -15,6 +17,40 @@ malloc_stats
 malloc_irq_safe
 mem_check_block
 mem_check_all
+
+# Stdio
+printf
+fopen
+fread
+fwrite
+fseek
+fclose
+fdopen
+ftell
+fflush
+rewind
+fputc
+dbglog
+sprintf
+vsprintf
+
+# Stdlib
+__assert
+abort
+
+# String
+memset
+memcmp
+memcpy
+strcat
+strcpy
+strlen
+
+# Misc
+abs
+__error
+
+######################################
 
 # Name Manager
 nmmgr_lookup
