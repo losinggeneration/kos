@@ -23,7 +23,8 @@
 #include "vq_types.h"
 
 /* For outputting KMG files */
-#include "../../addons/include/kmg/kmg.h"
+/* XXX we really need a better way of finding this file */
+#include "../../../kos-ports/include/kmg/kmg.h"
 
 static int use_mipmap = 0;
 static int use_twiddle = 0;
@@ -137,8 +138,6 @@ static void place(context_t *cb, fquad_t *quads, int nquads) {
 	double dist;
 	fquad_t *that;
 	
-	reset_codebook(cb);
-	
 	that = quads;
 	for (i=0; i<nquads; i++) {
 		/* find averages of all codebook entries */
@@ -157,6 +156,11 @@ static void place(context_t *cb, fquad_t *quads, int nquads) {
 		
 		that++;
 	}
+}
+
+static void clean_codebook(context_t *cb) {
+	int i;
+	code_t * e;
 	
 	e = cb->codes;
 	for (i=0; i<cb->in_use; i++) {
@@ -389,6 +393,8 @@ static int save(const char *filename, context_t *cb, mipmap_t *m, image_t *img) 
 		hdr.format = (use_alpha ? KMG_DCFMT_ARGB4444 : KMG_DCFMT_RGB565) | KMG_DCFMT_VQ;
 		if (use_twiddle)
 			hdr.format |= KMG_DCFMT_TWIDDLED;
+		if (use_mipmap)
+			hdr.format |= KMG_DCFMT_MIPMAP;
 		hdr.width = img->w;
 		hdr.height = img->h;
 		hdr.byte_count = 2048 + (use_mipmap ? 1 : 0);
@@ -532,8 +538,8 @@ static void destroy_mipmap(mipmap_t *m) {
 }
 
 static fquad_t *create_downscaled_map(int res, fquad_t *oneup) {
-	int	i, nquads;
-	fquad_t *q, larger, tmp;
+	int	y, x, nquads, qw;
+	fquad_t *q, *larger, tmp;
 	
 	if (use_debug) {
 		printf("create_downscaled_map(%d %x)\n", res, (unsigned)oneup);
@@ -542,45 +548,48 @@ static fquad_t *create_downscaled_map(int res, fquad_t *oneup) {
 	/* each quad in the lower resolution is an average of 
 	 * four quads in the higher resolution map.
 	 */
-	 
+
+	qw = 1 << res;
 	nquads = quads_in_map(res);
 	q = (fquad_t *)malloc(sizeof(fquad_t) * nquads);
 	if (q == NULL)
 		return NULL;
 		
-	for (i=0; i<nquads; i++) {
-		/* clear temporary quad */
-		clear_quad(&tmp);
-		
-		copy_quad(&larger, &oneup[i*4 + 0]);
-		sum_colors(&tmp.p[0], &larger.p[0]);
-		sum_colors(&tmp.p[0], &larger.p[1]);
-		sum_colors(&tmp.p[0], &larger.p[2]);
-		sum_colors(&tmp.p[0], &larger.p[3]);
-		div_colors(&tmp.p[0], 4.0f);
+	for (y=0; y<qw; y++) {
+		for (x=0; x<qw; x++) {
+			/* clear temporary quad */
+			clear_quad(&tmp);
 
-		copy_quad(&larger, &oneup[i*4 + 1]);
-		sum_colors(&tmp.p[1], &larger.p[0]);
-		sum_colors(&tmp.p[1], &larger.p[1]);
-		sum_colors(&tmp.p[1], &larger.p[2]);
-		sum_colors(&tmp.p[1], &larger.p[3]);
-		div_colors(&tmp.p[1], 4.0f);
+			larger = &oneup[y*2*qw*2 + x*2];
+			sum_colors(&tmp.p[0], &larger->p[0]);
+			sum_colors(&tmp.p[0], &larger->p[1]);
+			sum_colors(&tmp.p[0], &larger->p[2]);
+			sum_colors(&tmp.p[0], &larger->p[3]);
+			div_colors(&tmp.p[0], 4.0f);
 
-		copy_quad(&larger, &oneup[i*4 + 2]);
-		sum_colors(&tmp.p[2], &larger.p[0]);
-		sum_colors(&tmp.p[2], &larger.p[1]);
-		sum_colors(&tmp.p[2], &larger.p[2]);
-		sum_colors(&tmp.p[2], &larger.p[3]);
-		div_colors(&tmp.p[2], 4.0f);
+			larger = &oneup[y*2*qw*2 + x*2+1];
+			sum_colors(&tmp.p[1], &larger->p[0]);
+			sum_colors(&tmp.p[1], &larger->p[1]);
+			sum_colors(&tmp.p[1], &larger->p[2]);
+			sum_colors(&tmp.p[1], &larger->p[3]);
+			div_colors(&tmp.p[1], 4.0f);
 
-		copy_quad(&larger, &oneup[i*4 + 3]);
-		sum_colors(&tmp.p[3], &larger.p[0]);
-		sum_colors(&tmp.p[3], &larger.p[1]);
-		sum_colors(&tmp.p[3], &larger.p[2]);
-		sum_colors(&tmp.p[3], &larger.p[3]);
-		div_colors(&tmp.p[3], 4.0f);
-		
-		copy_quad(&q[i], &tmp);
+			larger = &oneup[(y*2+1)*qw*2 + x*2];
+			sum_colors(&tmp.p[2], &larger->p[0]);
+			sum_colors(&tmp.p[2], &larger->p[1]);
+			sum_colors(&tmp.p[2], &larger->p[2]);
+			sum_colors(&tmp.p[2], &larger->p[3]);
+			div_colors(&tmp.p[2], 4.0f);
+
+			larger = &oneup[(y*2+1)*qw*2 + x*2+1];
+			sum_colors(&tmp.p[3], &larger->p[0]);
+			sum_colors(&tmp.p[3], &larger->p[1]);
+			sum_colors(&tmp.p[3], &larger->p[2]);
+			sum_colors(&tmp.p[3], &larger->p[3]);
+			div_colors(&tmp.p[3], 4.0f);
+
+			copy_quad(&q[y*qw+x], &tmp);
+		}
 	}
 
 	return q;
@@ -616,27 +625,28 @@ static int build_mipmap(mipmap_t *m, image_t *i) {
 }	
 
 static void place_quads(context_t *cb, mipmap_t *m) {
-	int i, quads;
-	
-	for (i=0; i<MAX_MIPMAP; i++) {
+	int i, j, quads;
 
-		/* for each mipmap, scan all quads and update
-		 * statistics of which quad is the closest to
-		 * which codebook index entry
-		 */
-		if (m->map[i] != NULL) {
-			quads = quads_in_map(i);
-			place(cb, m->map[i], quads);
-			
-			if (use_hq) {
-				/* run over twice more to get better quality;
-				 * this is not required for most of textures
-				 */
-				place(cb, m->map[i], quads);
+	/* run three times to get better quality;
+	 * this is not required for most of textures
+	 */
+
+	reset_codebook(cb);
+
+	for (j=0; j<(use_hq?3:1); j++) {
+		for (i=0; i<MAX_MIPMAP; i++) {
+			/* for each mipmap, scan all quads and update
+			 * statistics of which quad is the closest to
+			 * which codebook index entry
+			 */
+			if (m->map[i] != NULL) {
+				quads = quads_in_map(i);
 				place(cb, m->map[i], quads);
 			}
 		}
 	}
+
+	clean_codebook(cb);
 }
 
 
