@@ -98,6 +98,19 @@ void mat_transform_sq(void * input, void * output, int veccnt);
 	x = __x; y = __y; z = __z; \
 }
 
+/* Transform vector, without any perspective division. */
+#define mat_trans_nodiv(x, y, z, w) { \
+	register float __x __asm__("fr0") = (x); \
+	register float __y __asm__("fr1") = (y); \
+	register float __z __asm__("fr2") = (z); \
+	register float __w __asm__("fr3") = (w); \
+	__asm__ __volatile__( \
+		"ftrv   xmtrx,fv0\n" \
+		: "=f" (__x), "=f" (__y), "=f" (__z), "=f" (__w) \
+		: "0" (__x), "1" (__y), "2" (__z), "3" (__w) ); \
+	x = __x; y = __y; z = __z; w = __w; \
+}
+
 
 __END_DECLS
 
