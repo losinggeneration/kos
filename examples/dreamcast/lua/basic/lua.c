@@ -9,6 +9,7 @@
 #include <kos.h>
 #include <conio/conio.h>
 
+#include <assert.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -102,7 +103,7 @@ static int l_getargs (lua_State *l) {
 #endif
 
 static void manual_input (int version, int prompt) {
-  int cont = 1;
+  int cont = 1, r;
   if (version) print_version();
   while (cont) {
     char buffer[MAXINPUT];
@@ -115,7 +116,8 @@ static void manual_input (int version, int prompt) {
       conio_printf(s);
       lua_pop(L, 1);  /* remove global */
     }
-    conio_input_getline(1, buffer, MAXINPUT);
+    r = conio_input_getline(-1, buffer, MAXINPUT);
+    assert( r >= 0 );
     if (strlen(buffer)) {
     	ldo(lua_dostring, buffer);
     	lua_settop(L, 0);  /* remove eventual results */
@@ -203,7 +205,7 @@ static int handle_argv (char *argv[], struct Options *opt) {
 #endif
 
 static void register_getargs (char *argv[]) {
-  lua_pushuserdata(L, argv);
+  lua_pushlightuserdata(L, argv);
   lua_pushcclosure(L, l_getargs, 1);
   lua_setglobal(L, "getargs");
 }
@@ -214,11 +216,11 @@ int main (int argc, char *argv[]) {
 
   cont_btn_callback(0, CONT_START, (cont_btn_callback_t)arch_exit);
   pvr_init_defaults();
-  conio_init(CONIO_TTY_PVR, CONIO_INPUT_LINE);
+  conio_init(CONIO_TTY_SERIAL, CONIO_INPUT_LINE);
 
   luaB_set_fputs((void (*)(const char *))conio_printf);
   
-  L = lua_open(0);  /* create state */
+  L = lua_open();  /* create state */
   if (L == NULL) {
     printf("Invalid state.. giving up\n");
     return -1;
