@@ -11,6 +11,52 @@
 #include <assert.h>
 #include <kos/netcfg.h>
 #include <dc/flashrom.h>
+#include <dc/vmu_pkg.h>
+
+#include "netcfg_icon.h"
+
+#if 0
+#define dbgp printf
+#else
+#define dbgp(x...)
+#endif
+
+void netcfg_vmuify(const char *filename_in, const char *filename_out) {
+	int	fd, pkg_size;
+	uint8	*buf;
+	uint8	*pkg_out;
+	vmu_pkg_t pkg;
+
+	dbgp("Opening source file\n");
+	fd = fs_open(filename_in, O_RDONLY);
+	buf = (uint8 *) malloc(fs_total(fd));
+	fs_read(fd, buf, fs_total(fd));
+	dbgp("Read %i bytes\n", fs_total(fd));
+
+	strcpy(pkg.desc_short, "KallistiOS 1.3");
+	strcpy(pkg.desc_long, "KOS Network Settings");
+	strcpy(pkg.app_id, "KOS");
+	pkg.icon_cnt = 1;
+	pkg.icon_anim_speed = 1;
+	memcpy(&pkg.icon_pal[0], netcfg_icon, 32);
+	pkg.icon_data = netcfg_icon + 32;
+	pkg.eyecatch_type = VMUPKG_EC_NONE;
+	pkg.data_len = fs_total(fd);
+	pkg.data = buf;
+	dbgp("Building package\n");
+	vmu_pkg_build(&pkg, &pkg_out, &pkg_size);
+	fs_close(fd);
+	dbgp("Closing source file\n");
+
+	dbgp("Opening output file\n");
+	fd = fs_open(filename_out, O_WRONLY);
+	dbgp("Writing..\n");
+	fs_write(fd, pkg_out, pkg_size);
+	dbgp("Closing output file\n");
+	fs_close(fd);
+	free(buf);
+	dbgp("VMUification complete\n");
+}
 
 /* This module attempts to ferret out a valid network configuration by
    drawing on all available sources. A file stored on the VMU is tried
@@ -29,6 +75,16 @@ int netcfg_load_from(const char * fn, netcfg_t * out) {
 	f = fopen(fn, "rb");
 	if (!f)
 		return -1;
+
+	// If we're reading from a VMU, seek past the header
+	// In the future, we could read this and use data_len to
+	// know how big the file really is
+	if (fn[0]=='/' && fn[1]=='v' && fn[2] == 'm' && fn[3] == 'u') {
+		// Make sure there's a VMU header to skip. If so, skip it.
+		fread(buf, 4, 1, f); buf[4] = 0;
+		if (strcmp(buf, "# KO"))
+			fseek(f, 128+512, SEEK_SET);
+	}
 
 	// Read each line...
 	while (fgets(buf, 64, f)) {
@@ -204,8 +260,14 @@ int netcfg_save_to(const char * fn, const netcfg_t * cfg) {
 
 	assert( cfg );
 
+	dbgp("Saving: %s\n",fn);
 	// Open the output file
-	f = fopen(fn, "wb");
+	if (fn[0]=='/' && fn[1]=='v' && fn[2] == 'm' && fn[3] == 'u') {
+		dbgp("Saving to VMU\n");
+		f = fopen("/ram/netcfg.tmp", "wb");
+	} else {
+		f = fopen(fn, "wb");
+	}
 	if (!f)
 		return -1;
 
@@ -251,6 +313,11 @@ int netcfg_save_to(const char * fn, const netcfg_t * cfg) {
 
 	fclose(f);
 
+	//If we're saving to a VMU, tack on the header and send it out
+	if (fn[0]=='/' && fn[1]=='v' && fn[2] == 'm' && fn[3] == 'u') {
+		netcfg_vmuify("/ram/netcfg.tmp", fn);
+		unlink("/ram/netcfg.tmp");
+	}
 	return 0;
 
 error:
