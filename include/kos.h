@@ -25,11 +25,17 @@ __BEGIN_DECLS
 #include <kos/fs_builtin.h>
 #include <kos/fs_romdisk.h>
 #include <kos/fs_ramdisk.h>
+#include <kos/fs_pty.h>
 #include <kos/limits.h>
 #include <kos/thread.h>
 #include <kos/sem.h>
 #include <kos/mutex.h>
 #include <kos/cond.h>
+#include <kos/genwait.h>
+#include <kos/library.h>
+#include <kos/net.h>
+#include <kos/nmmgr.h>
+#include <kos/exports.h>
 
 #include <arch/arch.h>
 #include <arch/cache.h>
