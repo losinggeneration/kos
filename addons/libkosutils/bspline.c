@@ -11,8 +11,6 @@
 
 #include <kos/bspline.h>
 
-CVSID("$Id: bspline.c,v 1.1 2002/09/05 07:33:25 bardtx Exp $");
-
 /* Pass it an array of points and it will calculate a set of B-spline
    co-efficients for generating a curve. There must be at least one point
    before the "current" one, and at least two after the "current" one (a
