@@ -491,6 +491,11 @@ typedef struct {
 	   if this is set, then _all_ enabled lists need to have a
 	   vertex buffer assigned. */
 	int		dma_enabled;
+
+	/* Non-zero if horizontal scaling is to be enabled. By enabling
+	   this setting and stretching your image to double the native
+	   screen width, you can get horizontal full-screen anti-aliasing. */
+	int		fsaa_enabled;
 } pvr_init_params_t;
 
 /* Initialize the PVR chip to ready status, enabling the specified lists
