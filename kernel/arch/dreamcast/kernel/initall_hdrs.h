@@ -5,6 +5,7 @@
 #include <kos/fs_pty.h>
 #include <kos/fs_romdisk.h>
 #include <kos/fs_ramdisk.h>
+#include <kos/library.h>
 #include <kos/net.h>
 #include <dc/fs_iso9660.h>
 #include <dc/fs_vmu.h>

@@ -2,7 +2,7 @@
 
    net/broadband_adapter.c
 
-   (c)2001 Dan Potter
+   Copyright (C)2001,2003 Dan Potter
 
  */
 
@@ -13,8 +13,9 @@
 #include <dc/g2bus.h>
 #include <arch/irq.h>
 #include <kos/net.h>
+#include <kos/thread.h>
 
-CVSID("$Id: broadband_adapter.c,v 1.10 2003/03/14 05:56:15 bardtx Exp $");
+CVSID("$Id: broadband_adapter.c,v 1.3 2003/07/22 03:31:58 bardtx Exp $");
 
 /*
 
@@ -116,11 +117,8 @@ static uint32 const txdesc[4] = {	0xa1846000,
 					0xa1847000,
 					0xa1847800 };
 
-/* Receive descriptors: temporary space to copy out received data */
-#define RX_BUFF_CNT 8
-static uint8 rxbuffs[RX_BUFF_CNT][1600];
-static uint32 rxbuffs_size[RX_BUFF_CNT];
-static int rxbuffs_free_cnt, rxbuffs_head, rxbuffs_tail;
+/* Receive buffer: temporary space to copy out received data */
+static uint8 rxbuff[1600];
 
 /* Is the link stabilized? */
 static volatile int link_stable;
@@ -303,42 +301,23 @@ static void bba_copy_packet(uint8 *dst, uint32 src, int len) {
 	}
 }
 
-/* Flush all RX buffers if possible, using the callback */
-static void flush_packets() {
-	/* printf("flushing %d packets\n", RX_BUFF_CNT - rxbuffs_free_cnt); */
-	if (eth_rx_callback) {
-		while (rxbuffs_free_cnt < RX_BUFF_CNT) {
-			eth_rx_callback(rxbuffs[rxbuffs_tail], rxbuffs_size[rxbuffs_tail]);
-			rxbuffs_tail = (rxbuffs_tail + 1) % RX_BUFF_CNT;
-			rxbuffs_free_cnt++;
-		}
-	}
-
-	/* Free up all RX buffers */
-	rxbuffs_free_cnt = RX_BUFF_CNT;
-	rxbuffs_tail = rxbuffs_head;
-}
-
-/* Copy one received packet out of the RX DMA space and into a RX buffer */
+/* Copy one received packet out of the RX DMA space and into the RX buffer */
 static void rx_enq(int ring_offset, int pkt_size) {
-	/* Flush RX packets immidiately if neccessary */
-	if (rxbuffs_free_cnt == 0)
-		flush_packets();
+	/* If there's no one to receive it, don't bother. */
+	if (eth_rx_callback) {
+		/* Copy it out */
+		bba_copy_packet(rxbuff, ring_offset, pkt_size);
 
-	/* Copy out the packet */
-	bba_copy_packet(rxbuffs[rxbuffs_head], ring_offset, pkt_size);
-	rxbuffs_size[rxbuffs_head] = pkt_size;
-
-	/* Move the head pointer */
-	rxbuffs_head = (rxbuffs_head + 1) % RX_BUFF_CNT;
-	rxbuffs_free_cnt--;
+		/* Call the callback to process it */
+		eth_rx_callback(rxbuff, pkt_size);
+	}
 }
 
 /* "Receive" any available packets and send them through the callback. */
 static int bba_rx() {
 	int	processed;
 	uint32	rx_status;
-	int	rx_size, pkt_size, ring_offset;
+	int	rx_size, pkt_size, ring_offset, intr;
 	
 	processed = 0;
 
@@ -359,22 +338,25 @@ static int bba_rx() {
 			dbglog(DBG_KDEBUG, "bba: frame receive error, status is %08lx; skipping\n", rx_status);
 		}
 
-		/* Tell the chip where we are for overflow checking */
-		rtl.cur_rx = (rtl.cur_rx + rx_size + 4 + 3) & ~3;
-		while (rtl.cur_rx >= RX_BUFFER_LEN)
-			rtl.cur_rx = rtl.cur_rx - RX_BUFFER_LEN;
-		g2_write_16(NIC(RT_RXBUFTAIL), rtl.cur_rx - 16);
-		
 		if ((rx_status & 1) && (pkt_size <= 1514)) {
 			/* Add it to the rx queue */
 			rx_enq(ring_offset + 4, pkt_size);
 		} else {
 			dbglog(DBG_KDEBUG, "bba: bogus packet receive detected; skipping packet\n");
 		}
+
+		/* Tell the chip where we are for overflow checking */
+		rtl.cur_rx = (rtl.cur_rx + rx_size + 4 + 3) & ~3;
+		g2_write_16(NIC(RT_RXBUFTAIL), rtl.cur_rx - 16);
+
+		/* If the chip is expecting an ACK, give it an ACK */
+		intr = g2_read_16(NIC(RT_INTRSTATUS));
+		if (intr & RT_INT_RX_ACK)
+			g2_write_16(NIC(RT_INTRSTATUS), RT_INT_RX_ACK);
+
+		/* Increase our "processed" count */
 		processed++;
 	}
-
-	flush_packets();
 	
 	return processed;
 }
@@ -433,13 +415,14 @@ int bba_tx(const uint8 *pkt, int len, int wait) {
 static void bba_irq_hnd(uint32 code) {
 	int intr, hnd;
 
-	/* Acknowledge 8193 interrupt */
+	/* Acknowledge 8193 interrupt, except RX ACK bits. We'll handle
+	   those in the RX int handler. */
 	intr = g2_read_16(NIC(RT_INTRSTATUS));
-	g2_write_16(NIC(RT_INTRSTATUS), intr);
+	g2_write_16(NIC(RT_INTRSTATUS), intr & ~RT_INT_RX_ACK);
 
 	/* Do processing */
 	hnd = 0;
-	if (intr & RT_INT_RX_OK) {
+	if (intr & RT_INT_RX_ACK) {
 		bba_rx(); hnd = 1;
 	}
 	if (intr & RT_INT_TX_OK) {
@@ -447,10 +430,15 @@ static void bba_irq_hnd(uint32 code) {
 	}
 	if (intr & RT_INT_LINK_CHANGE) {
 		if (!link_stable) {
-			dbglog(DBG_KDEBUG, "bba: link stabilized\n");
+			// XXX We need to output this somewhere, but if they
+			// are using native dcload-ip it won't work. Dump to the
+			// serial directly for now.
+			// dbglog(DBG_KDEBUG, "bba: link stabilized\n");
+			dbgio_write_str("bba: link stabilized\n");
 			link_stable = 1;
 		} else {
-			dbglog(DBG_KDEBUG, "bba: link change\n");
+			// dbglog(DBG_KDEBUG, "bba: link change\n");
+			dbgio_write_str("bba: link change\n");
 			link_stable = 0;
 			g2_write_16(NIC(RT_MII_BMCR), 0x9200);
 		}
@@ -511,10 +499,10 @@ static int bba_if_start(netif_t *self) {
 
 	/* We need something like this to get DHCP to work (since it doesn't
 	   know anything about an activated and yet not-yet-receiving network
-	   adapter =) but for now it's commented out. */
+	   adapter =) */
 	/* Spin until the link is stabilized */
-	/* while (!link_stable)
-		; */
+	while (!link_stable)
+		thd_pass();
 
 	bba_if.flags |= NETIF_RUNNING;
 	return 0;
@@ -561,11 +549,6 @@ static void bba_if_netinput(uint8 *pkt, int pktsize) {
 
 /* Initialize */
 int bba_init() {
-	/* Setup software RX buffers */
-	rxbuffs_free_cnt = RX_BUFF_CNT;
-	rxbuffs_head = 0;
-	rxbuffs_tail = 0;
-
 	/* Use the netcore callback */
 	bba_set_rx_callback(bba_if_netinput);
 
@@ -587,6 +570,23 @@ int bba_init() {
 	bba_if.if_rx_poll = bba_if_rx_poll;
 	bba_if.if_set_flags = bba_if_set_flags;
 
+
+#if 0
+	/* Try to detect/init us */
+	if (bba_if.if_detect(&bba_if) < 0) {
+		printf("net_bba: can't detect broadband adapter\n");
+		return -1;
+	}
+	if (bba_if.if_init(&bba_if) < 0) {
+		printf("net_bba: can't init broadband adapter\n");
+		return -1;
+	}
+	if (bba_if.if_start(&bba_if) < 0) {
+		printf("net_bba: can't start broadband adapter\n");
+		return -1;
+	}
+#endif
+
 	/* Append it to the chain */
 	return net_reg_device(&bba_if);
 }
@@ -599,9 +599,31 @@ int bba_shutdown() {
 #endif
 
 	/* Shutdown hardware */
-	bba_if_shutdown(&bba_if);
-
+	bba_if.if_stop(&bba_if);
+	bba_if.if_shutdown(&bba_if);
+	
 	return 0;
 }
 
 
+#if 0
+int module_init(int argc, char **argv) {
+	printf("net_bba: initializing\n");
+	if (bba_init() < 0)
+		return -1;
+	printf("net_bba: done initializing\n");
+	return 0;
+}
+
+int module_shutdown() {
+	printf("net_bba: exiting\n");
+	if (bba_shutdown() < 0)
+		return -1;
+	return 0;
+}
+
+#include <sys/module.h>
+int main(int argc, char **argv) {
+	return kos_do_module(module_init, module_shutdown, argc, argv);
+}
+#endif

@@ -91,6 +91,11 @@ int library_destroy(klibrary_t *lib);
    lib_open will already have been called. */
 klibrary_t * library_open(const char * name, const char * fn);
 
+/* Look up a library by name without trying to load or open it. This is
+   useful if you want to open a library in one place and not have to keep
+   track of the handle to close it later. */
+klibrary_t * library_lookup(const char * name);
+
 /* Close a previously opened library. If this fails, return < 0 for error. If
    it succeeds, return > 0; lib_close will already have been called, and the
    library may have been destroyed as well (do NOT try to use it again). */
@@ -101,6 +106,12 @@ libid_t library_get_libid(klibrary_t * lib);
 
 /* Retrieve library's reference count */
 int library_get_refcnt(klibrary_t * lib);
+
+/* Retrieve library's name */
+const char * library_get_name(klibrary_t * lib);
+
+/* Retrieve library's version */
+uint32 library_get_version(klibrary_t * lib);
 
 /* Init */
 int library_init();

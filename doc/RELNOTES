@@ -1,6 +1,16 @@
 KallistiOS ##version##
 Copyright (C)2002,2003 Dan Potter
 
+RELEASE NOTES for 1.3.0
+-----------------------
+This tree was branched from the 1.2.x tree somewhat slightly before the 1.2.1
+release, so everything in that entry applies to this one as well.
+
+Several libc standards compliance things were fixed, so stdlib.h no longer
+includes assert.h for you. This will break some code that assumes that
+assert() is available when stdlib.h (or kos.h) is included.
+
+
 RELEASE NOTES for 1.2.1
 -----------------------
 There is a new build system for addons/ports which is quite a bit more

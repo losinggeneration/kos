@@ -140,7 +140,7 @@ void maple_wait_scan() {
 
 	/* Wait for it to finish */
 	while (maple_state.detect_wrapped < 1)
-		;
+		thd_pass();
 
 	/* Enumerate everything */
 	dbglog(DBG_INFO, "maple: attached devices:\n");

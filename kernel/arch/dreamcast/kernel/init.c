@@ -85,6 +85,9 @@ int arch_auto_init() {
 	vmufs_init();
 	fs_vmu_init();
 
+	// Initialize library handling
+	library_init();
+
 	/* Now comes the optional stuff */
 	if (__kos_init_flags & INIT_IRQ) {
 		irq_enable();		/* Turn on IRQs */
@@ -117,6 +120,7 @@ void arch_auto_shutdown() {
 	hardware_shutdown();
 	net_shutdown();
 	pvr_shutdown();
+	library_shutdown();
 	fs_dcload_shutdown();
 	fs_vmu_shutdown();
 	vmufs_shutdown();

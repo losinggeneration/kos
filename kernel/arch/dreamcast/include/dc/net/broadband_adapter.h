@@ -4,7 +4,7 @@
  *
  * (c)2001-2002 Dan Potter
  *
- * $Id: broadband_adapter.h,v 1.2 2002/02/10 20:32:58 bardtx Exp $
+ * $Id: broadband_adapter.h,v 1.1 2003/07/31 00:54:04 bardtx Exp $
  */
 
 #ifndef __DC_NET_BROADBAND_ADAPTER_H
@@ -63,6 +63,9 @@ __BEGIN_DECLS
 #define RT_INT_TX_OK		0x0004
 #define RT_INT_RX_ERR		0x0002
 #define RT_INT_RX_OK		0x0001
+
+/* Composite RX bits we check for while doing an RX interrupt */
+#define RT_INT_RX_ACK (RT_INT_RXFIFO_OVERFLOW | RT_INT_RXBUF_OVERFLOW | RT_INT_RX_OK)
 
 /* RTL8139C transmit status bits */
 #define RT_TX_CARRIER_LOST	0x80000000	/* Carrier sense lost */

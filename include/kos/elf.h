@@ -149,8 +149,6 @@ struct klibrary;
 typedef struct elf_prog {
 	void	*data;		/* Data block containing the program */
 	uint32	size;		/* Memory image size (rounded up to page size) */
-	int	argc;		/* Arguments */
-	char	**argv;
 
 	/* Library exports */
 	ptr_t	lib_get_name;
