@@ -8,6 +8,7 @@
 #include <assert.h>
 #include <stdlib.h>
 #include <stdio.h>
+#include <string.h>
 #include <sys/queue.h>
 #include <dc/sound/sound.h>
 
@@ -68,8 +69,8 @@ int snd_mem_init(uint32 reserve) {
 	if (initted)
 		snd_mem_shutdown();
 
-	if (reserve & ~3)
-		reserve = (reserve + 3) & ~3;
+	// Make sure our base is 32-byte aligned
+	reserve = (reserve + 0x1f) & ~0x1f;
 
 	/* Make sure our tailq is initted */
 	TAILQ_INIT(&pool);
@@ -123,8 +124,8 @@ uint32 snd_mem_malloc(size_t size) {
 	if (size == 0)
 		return 0;
 
-	if (size & 3)
-		size = (size + 3) & ~3;
+	// Make sure the size is a multiple of 32 bytes to maintain alignment
+	size = (size + 0x1f) & ~0x1f;
 
 	/* Look for a block */
 	TAILQ_FOREACH(e, &pool, qent) {
