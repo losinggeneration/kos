@@ -9,13 +9,13 @@
 
 # Build rules
 %.o: %.c
-	kos-cc -c $< -o $@
+	kos-cc $(CFLAGS) -c $< -o $@
 
 %.o: %.cc
-	kos-c++ -c $< -o $@
+	kos-c++ $(CFLAGS) $(CXXFLAGS) -c $< -o $@
 
 %.o: %.cpp
-	kos-c++ -c $< -o $@
+	kos-c++ $(CFLAGS) $(CXXFLAGS) -c $< -o $@
 
 %.o: %.s
 	kos-as $< -o $@
