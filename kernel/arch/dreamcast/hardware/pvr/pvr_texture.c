@@ -1,11 +1,12 @@
 /* KallistiOS ##version##
 
    pvr_texture.c
-   (C)2002 Dan Potter
+   Copyright (C)2002,2004 Dan Potter
 
  */
 
 #include <assert.h>
+#include <string.h>
 #include <dc/pvr.h>
 #include <dc/sq.h>
 #include "pvr_internal.h"
@@ -178,7 +179,7 @@ void pvr_txr_load_kimg(kos_img_t *img, pvr_ptr_t dst, uint32 flags) {
 			if (flags & PVR_TXRLOAD_DMA) {
 				/* DMA is still too screwy: use SQs */
 				pvr_txr_load_dma(img->data, dst, img->byte_count,
-					(flags & PVR_TXRLOAD_NONBLOCK) ? 1 : 0);
+					(flags & PVR_TXRLOAD_NONBLOCK) ? 1 : 0, NULL, 0);
 				/* sq_cpy(dst, img->data, img->byte_count); */
 			} else if (flags & PVR_TXRLOAD_SQ) {
 				sq_cpy(dst, img->data, img->byte_count);

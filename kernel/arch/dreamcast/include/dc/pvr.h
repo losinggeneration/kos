@@ -796,13 +796,35 @@ void pvr_txr_load_kimg(kos_img_t *img, pvr_ptr_t dst, uint32 flags);
 
 /* PVR DMA ***********************************************************/
 
+/** Interrupt callback type */
+typedef void (*pvr_dma_callback_t)(ptr_t data);
+
+/** Perform a DMA transfer to the PVR. The source pointer must be 32-byte
+    aligned, and the count should be a multiple of 32 bytes. Type should
+    be one of the constants below. If block is non-zero, then the function
+    will only return when the DMA operation has completed. If callback is
+    non-NULL, then the function will be called on completion (in an interrupt
+    context!). Returns <0 for failure. */
+int pvr_dma_transfer(void * src, uint32 dest, uint32 count, int type,
+	int block, pvr_dma_callback_t callback, ptr_t cbdata);
+
+#define PVR_DMA_VRAM64	0	/*< Transfer to VRAM in interleaved mode */
+#define PVR_DMA_VRAM32	1	/*< Transfer to VRAM in linear mode */
+#define PVR_DMA_TA	2	/*< Transfer to the tile accelerator */
+
 /** Load a texture using PVR DMA. If block is non-zero, then the function
     will not return until the texture DMA is complete. Otherwise, check
-    the value of pvr_dma_complete() to see if things are ready. */
-void pvr_txr_load_dma(void * src, pvr_ptr_t dest, uint32 count, int block);
+    the value of pvr_dma_ready() to see if things are ready. */
+int pvr_txr_load_dma(void * src, pvr_ptr_t dest, uint32 count, int block,
+	pvr_dma_callback_t callback, ptr_t cbdata);
+
+/** Loads a block of vertex data to the tile accelerator. Same semantics as
+    the above stuff. */
+int pvr_dma_load_ta(void * src, uint32 count, int block,
+	pvr_dma_callback_t callback, ptr_t cbdata);
 
 /** Returns non-zero if PVR DMA is inactive. */
-int pvr_dma_complete();
+int pvr_dma_ready();
 
 /** Initialize PVR DMA */
 void pvr_dma_init();
