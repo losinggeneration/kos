@@ -22,7 +22,7 @@ or space present.
 
 */
 
-#include <arch/dbgio.h>
+#include <kos/dbgio.h>
 #include <kos/thread.h>
 #include <kos/mutex.h>
 #include <kos/cond.h>
@@ -508,7 +508,7 @@ static ssize_t pty_write(void * h, const void * buf, size_t bytes) {
 	if (ph->id == 0 && !ph->master && ph->other->refcnt == 0) {
 		/* This actually blocks, but fooey.. :) */
 		// dbgio_write_buffer_xlat((const uint8 *)buf, bytes);
-		dbgio_printk((const char *)buf);
+		dbgio_write_str((const char *)buf);
 		return bytes;
 	}
 

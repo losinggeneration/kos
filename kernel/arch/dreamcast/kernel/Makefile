@@ -10,8 +10,8 @@
 # target processor. Other routines may be present as well, but
 # that minimum set must be present.
 
-COPYOBJS = banner.o cache.o dbgio.o entry.o irq.o init.o mm.o panic.o
-COPYOBJS += rtc.o ser_console.o timer.o
+COPYOBJS = banner.o cache.o entry.o irq.o init.o mm.o panic.o
+COPYOBJS += rtc.o timer.o
 COPYOBJS += init_flags_default.o init_romdisk_default.o
 COPYOBJS += mmu.o itlb.o
 COPYOBJS += exec.o execasm.o stack.o gdb_stub.o thdswitch.o arch_exports.o

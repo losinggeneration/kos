@@ -36,10 +36,10 @@ __BEGIN_DECLS
 #include <kos/net.h>
 #include <kos/nmmgr.h>
 #include <kos/exports.h>
+#include <kos/dbgio.h>
 
 #include <arch/arch.h>
 #include <arch/cache.h>
-#include <arch/dbgio.h>
 #include <arch/irq.h>
 #include <arch/spinlock.h>
 #include <arch/timer.h>
@@ -77,6 +77,7 @@ __BEGIN_DECLS
 #	include <dc/flashrom.h>
 #	include <dc/vblank.h>
 #	include <dc/vmufs.h>
+#	include <dc/scif.h>
 #elif _arch_gba	/* _arch_dreamcast */
 #	include <gba/keys.h>
 #	include <gba/sprite.h>

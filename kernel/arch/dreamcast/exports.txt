@@ -31,7 +31,16 @@ vblank_handler_add
 vblank_handler_remove
 
 # Debug I/O
-dbgio_set_parameters
+scif_set_parameters
+scif_set_irq_usage
+scif_detected
+scif_init
+scif_shutdown
+scif_read
+scif_write
+scif_flush
+scif_write_buffer
+scif_read_buffer
 
 # Timers
 timer_prime

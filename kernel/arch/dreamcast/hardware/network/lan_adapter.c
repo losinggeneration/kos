@@ -14,7 +14,6 @@
 #include <dc/net/lan_adapter.h>
 #include <arch/irq.h>
 #include <arch/timer.h>
-#include <arch/dbgio.h>
 #include <kos/net.h>
 
 CVSID("$Id: lan_adapter.c,v 1.8 2003/02/25 07:39:37 bardtx Exp $");

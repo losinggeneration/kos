@@ -32,7 +32,7 @@
    sentinel checking, block leak checking, etc). Recommended during
    debugging phases, but you should probably take it out before you
    start your final testing. */
-/* #define KM_DBG */
+#define KM_DBG
 
 /* Enable this define if you want REALLY verbose debugging (print
    every time a block is allocated or freed). Only enable this if you

@@ -1,18 +1,15 @@
 /* KallistiOS ##version##
 
-   dbgio.c
+   hardware/scif.c
    Copyright (C)2000,2001,2004 Dan Potter
 */
 
-#include <string.h>
 #include <stdio.h>
-#include <stdarg.h>
+#include <errno.h>
+#include <kos/dbgio.h>
 #include <arch/arch.h>
-#include <arch/dbgio.h>
 #include <arch/spinlock.h>
 #include <arch/irq.h>
-
-CVSID("$Id: dbgio.c,v 1.4 2002/02/18 02:58:02 bardtx Exp $");
 
 /*
 
@@ -40,35 +37,18 @@ kernel or for debugging it.
 #define SCSPTR2	SCIFREG16(0xffe80020)
 #define SCLSR2	SCIFREG16(0xffe80024)
 
-/* This redirect is here to allow you to hook the debug output in your 
-   program if you want to do that. */
-dbgio_printk_func dbgio_printk = dbgio_null_write;
-
-/* Is serial enabled? This is a failsafe for making CDRs. */
-static int serial_enabled = 1;
-
 /* Default serial parameters */
 static int serial_baud = DEFAULT_SERIAL_BAUD,
 	serial_fifo = DEFAULT_SERIAL_FIFO;
 
+// This will get set to zero if we fail to send.
+static int serial_enabled = 1;
+
 /* Set serial parameters; this is not platform independent like I want
    it to be, but it should be generic enough to be useful. */
-void dbgio_set_parameters(int baud, int fifo) {
+void scif_set_parameters(int baud, int fifo) {
 	serial_baud = baud;
 	serial_fifo = fifo;
-}
-
-/* Enable serial support */
-void dbgio_enable() { serial_enabled = 1; }
-
-/* Disable serial support */
-void dbgio_disable() { serial_enabled = 0; }
-
-/* Set another function to capture all debug output */
-dbgio_printk_func dbgio_set_printk(dbgio_printk_func func) {
-	dbgio_printk_func rv = dbgio_printk;
-	dbgio_printk = func;
-	return rv;
 }
 
 // Receive ring buffer
@@ -76,6 +56,10 @@ dbgio_printk_func dbgio_set_printk(dbgio_printk_func func) {
 static uint8 recvbuf[BUFSIZE];
 static int rb_head = 0, rb_tail = 0, rb_cnt = 0;
 static int rb_paused = 0;
+
+static void rb_reset() {
+	rb_head = rb_tail = rb_cnt = rb_paused = 0;
+}
 
 static void rb_push_char(int c) {
 	recvbuf[rb_head] = c;
@@ -105,9 +89,9 @@ static int rb_pop_char() {
 	return c;
 }
 
-static int rb_space_free() {
+/* static int rb_space_free() {
 	return BUFSIZE - rb_cnt;
-}
+} */
 
 static int rb_space_used() {
 	return rb_cnt;
@@ -118,12 +102,12 @@ static int rb_space_used() {
    must look for available data and error conditions, and clear them all
    out if possible. If our internal ring buffer comes close to overflowing,
    the best we can do is twiddle RTS/CTS for a while. */
-static void dbgio_err_irq(irq_t src, irq_context_t * cxt) {
+static void scif_err_irq(irq_t src, irq_context_t * cxt) {
 	// Clear status bits
 	SCSCR2 &= ~0x08;
 	SCSCR2 |= 0x08;
 
-	printf("dbgio_err_irq called\n");
+	printf("scif_err_irq called\n");
 
 	// Did we get an error condition?
 	if (SCFSR2 & 0x9c) {	// Check ER, BRK, FER, PER
@@ -142,12 +126,12 @@ static void dbgio_err_irq(irq_t src, irq_context_t * cxt) {
 	}
 }
 
-static void dbgio_data_irq(irq_t src, irq_context_t * cxt) {
+static void scif_data_irq(irq_t src, irq_context_t * cxt) {
 	// Clear status bits
 	SCSCR2 &= ~0x40;
 	SCSCR2 |= 0x40;
 
-	//printf("dbgio_data_irq called\n");
+	//printf("scif_data_irq called\n");
 
 	// Check for received data available.
 	if (SCFSR2 & 3) {
@@ -160,24 +144,50 @@ static void dbgio_data_irq(irq_t src, irq_context_t * cxt) {
 	}
 }
 
+// Are we using IRQs?
+static int scif_irq_usage = 0;
+int scif_set_irq_usage(int on) {
+	scif_irq_usage = on;
+
+	// Clear out the buffer in any case
+	rb_reset();
+
+	if (scif_irq_usage) {
+		/* Hook the SCIF interrupt */
+		irq_set_handler(EXC_SCIF_ERI, scif_err_irq);
+		irq_set_handler(EXC_SCIF_BRI, scif_err_irq);
+		irq_set_handler(EXC_SCIF_RXI, scif_data_irq);
+		*((vuint16*)0xffd0000c) |= 0x000e << 4;
+
+		/* Enable transmit/receive, recv/recv error ints */
+		SCSCR2 |= 0x48;
+	} else {
+		/* Disable transmit/receive, recv/recv error ints */
+		SCSCR2 &= ~0x48;
+
+		/* Unhook the SCIF interrupt */
+		*((vuint16*)0xffd0000c) &= ~(0x000e << 4);
+		irq_set_handler(EXC_SCIF_ERI, NULL);
+		irq_set_handler(EXC_SCIF_BRI, NULL);
+		irq_set_handler(EXC_SCIF_RXI, NULL);
+	}
+
+	return 0;
+}
+
+// We are always detected, though we might end up realizing there's no
+// cable connected later...
+int scif_detected() {
+	return 1;
+}
+
 /* Initialize the SCIF port; baud_rate must be at least 9600 and
    no more than 57600. 115200 does NOT work for most PCs. */
 // recv trigger to 1 byte
-void dbgio_init() {
+int scif_init() {
 	int i;
 	/* int fifo = 1; */
 
-	/* If another handler hasn't been set, then set our serial
-	   write handler to capture console output. */
-	if (dbgio_printk == dbgio_null_write)
-		dbgio_printk = dbgio_write_str;
-
-	/* Hook the SCIF interrupt */
-	irq_set_handler(EXC_SCIF_ERI, dbgio_err_irq);
-	irq_set_handler(EXC_SCIF_BRI, dbgio_err_irq);
-	irq_set_handler(EXC_SCIF_RXI, dbgio_data_irq);
-	*((vuint16*)0xffd0000c) |= 0x000e << 4;
-	
 	/* Disable interrupts, transmit/receive, and use internal clock */
 	SCSCR2 = 0;
 
@@ -207,22 +217,61 @@ void dbgio_init() {
 	(void)SCLSR2;
 	SCLSR2 = 0;
 	
-	/* Enable transmit/receive, recv/recv error ints */
-	SCSCR2 = 0x78;
-
-	/* Start off enabled */
-	serial_enabled = 1;
+	/* Enable transmit/receive */
+	SCSCR2 = 0x30;
 
 	/* Wait a bit for it to stabilize */
 	for (i=0; i<10000; i++)
 		asm("nop");
+
+	return 0;
+}
+
+int scif_shutdown() {
+	scif_set_irq_usage(DBGIO_MODE_POLLED);
+	return 0;
+}
+
+/* Read one char from the serial port (-1 if nothing to read) */
+int scif_read() {
+	if (!serial_enabled) {
+		errno = EIO;
+		return -1;
+	}
+
+	if (scif_irq_usage) {
+		// Do we have anything ready?
+		if (rb_space_used() <= 0) {
+			errno = EAGAIN;
+			return -1;
+		} else
+			return rb_pop_char();
+	} else {
+		int c;
+
+		if (!(SCFDR2 & 0x1f)) {
+			errno = EAGAIN;
+			return -1;
+		}
+
+		// Get the input char
+		c = SCFRDR2;
+
+		// Ack
+		SCFSR2 &= ~0x92;
+
+		return c;
+	}
 }
 
 /* Write one char to the serial port (call serial_flush()!) */
-void dbgio_write(int c) {
+int scif_write(int c) {
 	int timeout = 100000;
 
-	if (!serial_enabled) return;
+	if (!serial_enabled) {
+		errno = EIO;
+		return -1;
+	}
 	
 	/* Wait until the transmit buffer has space. Too long of a failure
 	   is indicative of no serial cable. */
@@ -230,7 +279,8 @@ void dbgio_write(int c) {
 		timeout--;
 	if (timeout <= 0) {
 		serial_enabled = 0;
-		return;
+		errno = EIO;
+		return -1;
 	}
 	
 	/* Send the char */
@@ -238,13 +288,18 @@ void dbgio_write(int c) {
 	
 	/* Clear status */
 	SCFSR2 &= 0xff9f;
+
+	return 1;
 }
 
 /* Flush all FIFO'd bytes out of the serial port buffer */
-void dbgio_flush() {
+int scif_flush() {
 	int timeout = 100000;
 
-	if (!serial_enabled) return;
+	if (!serial_enabled) {
+		errno = EIO;
+		return -1;
+	}
 
 	SCFSR2 &= 0xbf;
 
@@ -252,82 +307,63 @@ void dbgio_flush() {
 		timeout--;
 	if (timeout <= 0) {
 		serial_enabled = 0;
-		return;
+		errno = EIO;
+		return -1;
 	}
 
 	SCFSR2 &= 0xbf;
+
+	return 0;
 }
 
 /* Send an entire buffer */
-void dbgio_write_buffer(const uint8 *data, int len) {
-	while (len-- > 0)
-		dbgio_write(*data++);
-	dbgio_flush();
-}
-
-/* Send an entire buffer */
-void dbgio_write_buffer_xlat(const uint8 *data, int len) {
+int scif_write_buffer(const uint8 *data, int len, int xlat) {
+	int rv, i = 0, c;
 	while (len-- > 0) {
-		if (*data == '\n')
-			dbgio_write('\r');
-		dbgio_write(*data++);
+		c = *data++;
+		if (xlat) {
+			if (c == '\n') {
+				if (scif_write('\r') < 0)
+					return -1;
+				i++;
+			}
+		}
+		rv = scif_write(c);
+		if (rv < 0)
+			return -1;
+		i += rv;
 	}
-	dbgio_flush();
-}
-
-/* Send a string (null-terminated) */
-void dbgio_write_str(const char *str) {
-	dbgio_write_buffer_xlat((const uint8*)str, strlen(str));
-}
-
-/* Null write-string function for pre-init */
-void dbgio_null_write(const char *str) {
-}
-
-/* Read one char from the serial port (-1 if nothing to read) */
-int dbgio_read() {
-	if (!serial_enabled) return -1;
-
-	// Do we have anything ready?
-	if (rb_space_used() <= 0)
+	if (scif_flush() < 0)
 		return -1;
-	else
-		return rb_pop_char();
-}
-
-/* Read an entire buffer (block) */
-void dbgio_read_buffer(uint8 *data, int len) {
-	int c;
-	while (len-- > 0) {
-		while ( (c = dbgio_read()) == -1)
-			;
-		*data++ = c;
-	}
-}
-
-/* Not re-entrant */
-static char printf_buf[1024];
-static spinlock_t lock = SPINLOCK_INITIALIZER;
-
-int dbgio_printf(const char *fmt, ...) {
-	va_list args;
-	int i;
-
-	/* XXX This isn't correct. We could be inside an int with IRQs
-	  enabled, and we could be outside an int with IRQs disabled, which
-	  would cause a deadlock here. We need an irq_is_enabled()! */
-	if (!irq_inside_int())
-		spinlock_lock(&lock);
-
-	va_start(args, fmt);
-	i = vsprintf(printf_buf, fmt, args);
-	va_end(args);
-
-	dbgio_printk(printf_buf);
-
-	if (!irq_inside_int())
-		spinlock_unlock(&lock);
 
 	return i;
 }
 
+/* Read an entire buffer (block) */
+int scif_read_buffer(uint8 *data, int len) {
+	int c, i = 0;
+	while (len-- > 0) {
+		while ( (c = scif_read()) == -1) {
+			if (errno != EAGAIN)
+				return -1;
+		}
+		*data++ = c;
+		i++;
+	}
+
+	return i;
+}
+
+// Tie all of that together into a dbgio package.
+dbgio_handler_t dbgio_scif = {
+	"scif",
+	scif_detected,
+	scif_init,
+	scif_shutdown,
+	scif_set_irq_usage,
+	scif_read,
+	scif_write,
+	scif_flush,
+	scif_write_buffer,
+	scif_read_buffer
+};

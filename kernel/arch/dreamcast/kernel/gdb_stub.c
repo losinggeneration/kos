@@ -146,10 +146,10 @@
 	So 
 	"0* " means the same as "0000".  */
 
+#include <dc/scif.h>
 #include <arch/gdb.h>
 #include <arch/types.h>
 #include <arch/irq.h>
-#include <arch/dbgio.h>
 #include <arch/arch.h>
 #include <arch/cache.h>
 
@@ -786,7 +786,7 @@ getDebugChar (void)
   int ch;
 
   /* Spin while nothing is available. */
-  while((ch = dbgio_read()) < 0);
+  while((ch = scif_read()) < 0);
 
   return (ch & 0xff);
 }
@@ -795,8 +795,8 @@ static void
 putDebugChar (char ch)
 {
   /* write the char and flush it. */
-  dbgio_write(ch);
-  dbgio_flush();
+  scif_write(ch);
+  scif_flush();
 }
 
 static void handle_exception(irq_t code, irq_context_t *context) {
@@ -822,7 +822,7 @@ static void handle_gdb_trapa(irq_t code, irq_context_t *context) {
 }
 
 void gdb_init() {
-  dbgio_set_parameters(57600, 1);
+  scif_set_parameters(57600, 1);
   irq_set_handler(EXC_ILLEGAL_INSTR, handle_exception);
   irq_set_handler(EXC_SLOT_ILLEGAL_INSTR, handle_exception);
   irq_set_handler(EXC_DATA_ADDRESS_READ, handle_exception);

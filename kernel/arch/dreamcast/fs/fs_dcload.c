@@ -1,7 +1,8 @@
 /* KallistiOS ##version##
 
    kernel/arch/dreamcast/fs/fs_dcload.c
-   (c)2002 Andrew Kieschnick
+   Copyright (C)2002 Andrew Kieschnick
+   Copyright (C)2004 Dan Potter
    
 */
 
@@ -18,9 +19,10 @@ printf goes to the dc-tool console
 #include <dc/fs_dcload.h>
 #include <kos/thread.h>
 #include <arch/spinlock.h>
-#include <arch/dbgio.h>
+#include <kos/dbgio.h>
 #include <kos/fs.h>
 
+#include <errno.h>
 #include <stdio.h>
 #include <ctype.h>
 #include <string.h>
@@ -29,8 +31,6 @@ printf goes to the dc-tool console
 CVSID("$Id: fs_dcload.c,v 1.14 2003/04/24 03:05:49 bardtx Exp $");
 
 static spinlock_t mutex = SPINLOCK_INITIALIZER;
-
-static dbgio_printk_func old_printk = 0;
 
 #define plain_dclsc(...) ({ \
 	int old = 0, rv; \
@@ -60,12 +60,16 @@ static void * lwip_dclsc = 0;
 
 /* Printk replacement */
 
-void dcload_printk(const char *str) {
-    if (lwip_dclsc && irq_inside_int())
-	return;
+int dcload_write_buffer(const uint8 *data, int len, int xlat) {
+    if (lwip_dclsc && irq_inside_int()) {
+	errno = EAGAIN;
+	return -1;
+    }
     spinlock_lock(&mutex);
-    dclsc(DCLOAD_WRITE, 1, str, strlen(str));
+    dclsc(DCLOAD_WRITE, 1, data, len);
     spinlock_unlock(&mutex);
+
+    return len;
 }
 
 static char *dcload_path = NULL;
@@ -327,14 +331,23 @@ static vfs_handler_t vh = {
 	NULL                /* mmap */
 };
 
+dbgio_handler_t dbgio_dcload = { 0 };
+
+int fs_dcload_detected() {
+    /* Check for dcload */
+    if (*DCLOADMAGICADDR == DCLOADMAGICVALUE)
+	return 1;
+    else
+	return 0;
+}
+
 /* Call this before arch_init_all (or any call to dbgio_*) to use dcload's
    console output functions. */
 void fs_dcload_init_console() {
-    /* Check for dcload */
-    if (*DCLOADMAGICADDR != DCLOADMAGICVALUE)
-	return;
-
-    old_printk = dbgio_set_printk(dcload_printk);
+    /* Setup our dbgio handler */
+    memcpy(&dbgio_dcload, &dbgio_null, sizeof(dbgio_dcload));
+    dbgio_dcload.detected = fs_dcload_detected;
+    dbgio_dcload.write_buffer = dcload_write_buffer;
 }
 
 static int *dcload_wrkmem = NULL;
@@ -389,11 +402,7 @@ int fs_dcload_shutdown() {
        continue using the debug channel */
     if (dcload_type != DCLOAD_TYPE_IP && !lwip_dclsc) {
         dcload_type = DCLOAD_TYPE_NONE;
-    
-	if (old_printk) {
-	    dbgio_set_printk(old_printk);
-	    old_printk = 0;
-	}
+        dbgio_dev_select("scif");
     }
 
     return nmmgr_handler_remove(&vh.nmmgr);
@@ -407,8 +416,6 @@ int fs_dcload_init_lwip(void *p)
     /* Check for combination of KOS networking and dcload-ip */
     if ((dcload_type == DCLOAD_TYPE_IP) && (__kos_init_flags & INIT_NET)) {
 	lwip_dclsc = p;
-
-	old_printk = dbgio_set_printk(dcload_printk);
 
 	dbglog(DBG_INFO, "dc-load console support enabled (lwIP)\n");
     } else

@@ -8,8 +8,8 @@
 #include <stdarg.h>
 #include <string.h>
 #include <kos/thread.h>
+#include <kos/dbgio.h>
 #include <arch/spinlock.h>
-#include <arch/dbgio.h>
 
 /* Not re-entrant */
 static char printf_buf[1024];
@@ -26,7 +26,7 @@ int printf(const char *fmt, ...) {
 	va_end(args);
 
 	if (irq_inside_int())
-		dbgio_printk(printf_buf);
+		dbgio_write_str(printf_buf);
 	else
 		fs_write(1, printf_buf, strlen(printf_buf));
 
@@ -74,7 +74,7 @@ void dbglog(int level, const char *fmt, ...) {
 	va_end(args);
 
 	if (irq_inside_int())
-		dbgio_printk(printf_buf);
+		dbgio_write_str(printf_buf);
 	else
 		fs_write(1, printf_buf, strlen(printf_buf));
 

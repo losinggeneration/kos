@@ -7,6 +7,7 @@
 #include <kos/fs_ramdisk.h>
 #include <kos/library.h>
 #include <kos/net.h>
+#include <kos/dbgio.h>
 #include <dc/fs_iso9660.h>
 #include <dc/fs_vmu.h>
 #include <dc/fs_dcload.h>
@@ -15,7 +16,6 @@
 #include <dc/pvr.h>
 #include <dc/maple.h>
 #include <dc/sound/sound.h>
+#include <dc/scif.h>
 #include <arch/irq.h>
 #include <arch/timer.h>
-#include <arch/dbgio.h>
-

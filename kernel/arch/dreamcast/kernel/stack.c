@@ -12,8 +12,8 @@
    We could probably technically move this into arch indep with a bit more
    work... */
 
+#include <kos/dbgio.h>
 #include <arch/arch.h>
-#include <arch/dbgio.h>
 #include <arch/stack.h>
 
 CVSID("$Id: stack.c,v 1.1 2002/09/13 04:40:52 bardtx Exp $");

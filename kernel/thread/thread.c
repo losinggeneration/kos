@@ -70,7 +70,7 @@ int thd_mode = THD_MODE_NONE;
 
 /*****************************************************************************/
 /* Debug */
-#include <arch/dbgio.h>
+#include <kos/dbgio.h>
 
 static const char *thd_state_to_str(kthread_t * thd) {
 	switch(thd->state) {

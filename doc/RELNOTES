@@ -21,6 +21,9 @@ libraries like OggVorbis. Also if you are a stream user, you need to alloc
 and free channels, and pass a handle along with it. See the OggVorbis libs
 for an example.
 
+The dbgio functions have changed. It now implements a full debug-friendly
+console system. See include/kos/dbgio.h for more info.
+
 
 RELEASE NOTES for 1.2.1
 -----------------------

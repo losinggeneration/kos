@@ -57,7 +57,7 @@ struct kllist library_list;
 
 /*****************************************************************************/
 /* Debug */
-#include <arch/dbgio.h>
+#include <kos/dbgio.h>
 
 int library_print_list(int (*pf)(const char *fmt, ...)) {
 	klibrary_t *cur;

@@ -6,7 +6,9 @@
 
 #include <stdio.h>
 #include <malloc.h>
-#include <arch/dbgio.h>
+#include <string.h>
+#include <stdlib.h>
+#include <kos/dbgio.h>
 #include <arch/timer.h>
 #include <arch/arch.h>
 #include <arch/irq.h>
@@ -30,12 +32,18 @@ int	main(int argc, char **argv);
 /* Double-ditto */
 extern const char banner[];
 
+/* We have to put this here so we can include plat-specific devices */
+dbgio_handler_t * dbgio_handlers[] = {
+	&dbgio_dcload,
+	&dbgio_scif,
+	&dbgio_null
+};
+int dbgio_handler_cnt = sizeof(dbgio_handlers) / sizeof(dbgio_handler_t *);
+
 /* Auto-init stuff: comment out here if you don't like this stuff
    to be running in your build, and also below in arch_main() */
 /* #if 0 */
 int arch_auto_init() {
-	dbgio_printk_func old;
-
 	/* Initialize memory management */
 	mm_init();
 
@@ -46,13 +54,17 @@ int arch_auto_init() {
 
 	if (!(__kos_init_flags & INIT_NO_DCLOAD))
 		fs_dcload_init_console();	/* Init dc-load console, if applicable */
-	dbgio_init();			/* Init debug IO and print a banner */
+
+	/* Init debug IO */
+	dbgio_init();
+
+	/* Print a banner */
 	if (__kos_init_flags & INIT_QUIET)
-		dbgio_set_printk(dbgio_null_write);
+		dbgio_disable();
 	else {
 		// PTYs not initialized yet
-		dbgio_printk("\n--\n");
-		dbgio_printk(banner);
+		dbgio_write_str("\n--\n");
+		dbgio_write_str(banner);
 	}
 	
 	timer_init();			/* Timers */
@@ -96,11 +108,11 @@ int arch_auto_init() {
 		irq_enable();		/* Turn on IRQs */
 		maple_wait_scan();	/* Wait for the maple scan to complete */
 	}
-	if (!(__kos_init_flags & INIT_NO_DCLOAD) && *DCLOADMAGICADDR == DCLOADMAGICVALUE &&
+	/* if (!(__kos_init_flags & INIT_NO_DCLOAD) && *DCLOADMAGICADDR == DCLOADMAGICVALUE &&
 		(__kos_init_flags & INIT_NET))
 	{
 		old = dbgio_set_printk(dbgio_write_str);
-	}
+	} */
 	if (__kos_init_flags & INIT_NET) {
 		net_init();		/* Enable networking (and drivers) */
 	}

@@ -16,6 +16,9 @@ __BEGIN_DECLS
 #include <arch/types.h>
 #include <kos/limits.h>
 #include <kos/fs.h>
+#include <kos/dbgio.h>
+
+extern dbgio_handler_t dbgio_dcload;
 
 /* dcload magic value */
 #define DCLOADMAGICVALUE 0xdeadbeef

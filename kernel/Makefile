@@ -6,7 +6,7 @@
 # $Id: Makefile,v 1.5 2002/02/27 05:43:11 bardtx Exp $
 
 OBJS =
-SUBDIRS = arch fs thread net exports
+SUBDIRS = arch debug fs thread net exports
 STUBS = stubs/kernel_export_stubs.o stubs/arch_export_stubs.o
 
 all: subdirs $(STUBS)
