@@ -149,9 +149,9 @@
 #include <arch/irq.h>
 #include <arch/dbgio.h>
 #include <arch/arch.h>
+#include <arch/cache.h>
 
 #include <string.h>
-
 
 /* Hitachi SH architecture instruction encoding masks */
 
@@ -167,7 +167,9 @@
 /* Hitachi SH instruction opcodes */
 
 #define BF_INSTR       0x8b00
+#define BFS_INSTR      0x8f00
 #define BT_INSTR       0x8900
+#define BTS_INSTR      0x8d00
 #define BRA_INSTR      0xa000
 #define BSR_INSTR      0xb000
 #define JMP_INSTR      0x402b
@@ -175,7 +177,7 @@
 #define RTS_INSTR      0x000b
 #define RTE_INSTR      0x002b
 #define TRAPA_INSTR    0xc300
-#define SSTEP_INSTR    0xc3ff
+#define SSTEP_INSTR    0xc320
 
 /* Hitachi SH processor register masks */
 
@@ -257,7 +259,7 @@ static char lowhex(int  x)
  * Assembly macros
  */
 
-#define BREAKPOINT()   asm("trapa	#0x20"::);
+#define BREAKPOINT()   asm("trapa	#0xff"::);
 
 
 /*
@@ -504,14 +506,16 @@ doSStep (void)
   short *instrMem;
   int displacement;
   int reg;
-  unsigned short opcode;
+  unsigned short opcode, br_opcode;
 
   instrMem = (short *) registers[PC];
 
   opcode = *instrMem;
   stepped = 1;
 
-  if ((opcode & COND_BR_MASK) == BT_INSTR)
+  br_opcode = opcode & COND_BR_MASK;
+
+  if (br_opcode == BT_INSTR || br_opcode == BTS_INSTR)
     {
       if (registers[SR] & T_BIT_MASK)
 	{
@@ -525,12 +529,18 @@ doSStep (void)
 	  instrMem = (short *) (registers[PC] + displacement + 4);
 	}
       else
-	instrMem += 1;
+      {
+	/* can't put a trapa in the delay slot of a bt/s instruction */
+	instrMem += ( br_opcode == BTS_INSTR ) ? 2 : 1;
+      }
     }
-  else if ((opcode & COND_BR_MASK) == BF_INSTR)
+  else if (br_opcode == BF_INSTR || br_opcode == BFS_INSTR)
     {
       if (registers[SR] & T_BIT_MASK)
-	instrMem += 1;
+    {
+	/* can't put a trapa in the delay slot of a bf/s instruction */
+	instrMem += ( br_opcode == BFS_INSTR ) ? 2 : 1;
+    }
       else
 	{
 	  displacement = (opcode & COND_DISP) << 1;
@@ -573,6 +583,7 @@ doSStep (void)
   instrBuffer.memAddr = instrMem;
   instrBuffer.oldInstr = *instrMem;
   *instrMem = SSTEP_INSTR;
+  icache_flush_range((uint32)instrMem, 2);
 }
 
 
@@ -586,6 +597,7 @@ undoSStep (void)
     {  short *instrMem;
       instrMem = instrBuffer.memAddr;
       *instrMem = instrBuffer.oldInstr;
+      icache_flush_range((uint32)instrMem, 2);
     }
   stepped = 0;
 }
@@ -615,15 +627,6 @@ gdb_handle_exception (int exceptionVector)
   remcomOutBuffer[3] = 0;
 
   putpacket (remcomOutBuffer);
-
-  /*
-   * trapa indicates a software trap inserted in
-   * place of code ... so back up PC by one
-   * instruction, since this instruction will
-   * later be replaced by its original one!
-   */
-//  if (exceptionVector == EXC_TRAPA)
-//    registers[PC] -= 2;
 
   /*
    * Do the thangs needed to undo
@@ -686,6 +689,7 @@ gdb_handle_exception (int exceptionVector)
 		    if (*(ptr++) == ':')
 		      {
 			hex2mem (ptr, (char *) addr, length);
+			icache_flush_range(addr, length);
 			ptr = 0;
 			strcpy (remcomOutBuffer, "OK");
 		      }
@@ -760,8 +764,20 @@ static void handle_exception(irq_t code, irq_context_t *context) {
 	gdb_handle_exception(code);
 }
 
-static void handle_trapa(irq_t code, irq_context_t *context) {
+static void handle_user_trapa(irq_t code, irq_context_t *context) {
 	registers = (uint32 *)context;
+	gdb_handle_exception(EXC_TRAPA);
+}
+
+static void handle_gdb_trapa(irq_t code, irq_context_t *context) {
+	/*
+  	* trapa 0x20 indicates a software trap inserted in
+  	* place of code ... so back up PC by one
+  	* instruction, since this instruction will
+  	* later be replaced by its original one!
+  	*/
+	registers = (uint32 *)context;
+	registers[PC] -= 2;
 	gdb_handle_exception(EXC_TRAPA);
 }
 
@@ -772,7 +788,7 @@ void gdb_init() {
   irq_set_handler(EXC_DATA_ADDRESS_READ, handle_exception);
   irq_set_handler(EXC_DATA_ADDRESS_WRITE, handle_exception);
 
-  trapa_set_handler(32, handle_trapa);
-  trapa_set_handler(255, handle_trapa);
+  trapa_set_handler(32, handle_gdb_trapa);
+  trapa_set_handler(255, handle_user_trapa);
   BREAKPOINT();
 }
