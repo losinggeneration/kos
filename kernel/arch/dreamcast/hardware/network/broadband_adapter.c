@@ -121,7 +121,7 @@ static uint32 const txdesc[4] = {	0xa1846000,
 static uint8 rxbuff[1600];
 
 /* Is the link stabilized? */
-static volatile int link_stable;
+static volatile int link_stable, link_initial;
 
 /* Receive callback */
 static eth_rx_callback_t eth_rx_callback;
@@ -149,6 +149,7 @@ static int bba_hw_init() {
 	uint32 tmp;
 
 	link_stable = 0;
+	link_initial = 0;
 
 	/* Initialize GAPS */
 	if (gaps_init() < 0)
@@ -158,9 +159,15 @@ static int bba_hw_init() {
 	g2_write_8(NIC(RT_CHIPCMD), RT_CMD_RESET);
 	
 	/* Wait for it to come back */
-	i = 1000;
-	while ((g2_read_8(NIC(RT_CHIPCMD)) & RT_CMD_RESET) && i > 0)
+	i = 100;
+	while ((g2_read_8(NIC(RT_CHIPCMD)) & RT_CMD_RESET) && i > 0) {
 		i--;
+		thd_sleep(10);
+	}
+	if (g2_read_8(NIC(RT_CHIPCMD)) & RT_CMD_RESET) {
+		dbglog(DBG_ERROR, "bba: timed out on reset #1\n");
+		return -1;
+	}
 
 	/* Reset CONFIG1 */
 	g2_write_8(NIC(RT_CONFIG1), 0);
@@ -173,9 +180,15 @@ static int bba_hw_init() {
 	g2_write_8(NIC(RT_CHIPCMD), RT_CMD_RESET);
 	
 	/* Wait for it to come back */
-	i = 1000;
-	while ((g2_read_8(NIC(RT_CHIPCMD)) & RT_CMD_RESET) && i > 0)
+	i = 100;
+	while ((g2_read_8(NIC(RT_CHIPCMD)) & RT_CMD_RESET) && i > 0) {
 		i--;
+		thd_sleep(10);
+	}
+	if (g2_read_8(NIC(RT_CHIPCMD)) & RT_CMD_RESET) {
+		dbglog(DBG_ERROR, "bba: timed out on reset #2\n");
+		return -1;
+	}
 
 	/* Enable writing to the config registers */
 	g2_write_8(NIC(RT_CFG9346), 0xc0);
@@ -244,7 +257,7 @@ static int bba_hw_init() {
 	g2_write_16(NIC(RT_INTRMASK), RT_INT_PCIERR |
 		RT_INT_TIMEOUT |
 		RT_INT_RXFIFO_OVERFLOW |
-		RT_INT_RXFIFO_UNDERRUN |
+		RT_INT_RXFIFO_UNDERRUN |	// +link change
 		RT_INT_RXBUF_OVERFLOW |
 		RT_INT_TX_ERR |
 		RT_INT_TX_OK |
@@ -429,19 +442,42 @@ static void bba_irq_hnd(uint32 code) {
 		hnd = 1;
 	}
 	if (intr & RT_INT_LINK_CHANGE) {
-		if (!link_stable) {
-			// XXX We need to output this somewhere, but if they
-			// are using native dcload-ip it won't work. Dump to the
-			// serial directly for now.
-			// dbglog(DBG_KDEBUG, "bba: link stabilized\n");
-			dbgio_write_str("bba: link stabilized\n");
+		// Get the MII media status reg.
+		uint32 bmsr = g2_read_16(NIC(RT_MII_BMSR));
+
+		// If this is the first time, force a renegotiation.
+		if (!link_initial) {
+			bmsr &= ~(RT_MII_LINK | RT_MII_AN_COMPLETE);
+			dbglog(DBG_INFO, "bba: initial link change, redoing auto-neg\n");
+		}
+		
+		// This should really be a bit more complete, but this
+		// should be sufficient.
+
+		// Is our link there?
+		if (bmsr & RT_MII_LINK) {
+			// We must have just finished an auto-negotiation.
+			dbglog(DBG_INFO, "bba: link stable\n");
+
+			// The link is back.
 			link_stable = 1;
 		} else {
-			// dbglog(DBG_KDEBUG, "bba: link change\n");
-			dbgio_write_str("bba: link change\n");
+			if (link_initial)
+				dbglog(DBG_INFO, "bba: link lost\n");
+
+			// Do an auto-negotiation.
+			g2_write_16(NIC(RT_MII_BMCR),
+				RT_MII_RESET |
+				RT_MII_AN_ENABLE |
+				RT_MII_AN_START);
+
+			// The link is gone.
 			link_stable = 0;
-			g2_write_16(NIC(RT_MII_BMCR), 0x9200);
 		}
+
+		// We've done our initial link interrupt now.
+		link_initial = 1;
+		
 		hnd = 1;
 	}
 	if (intr & RT_INT_RXBUF_OVERFLOW) {
@@ -494,6 +530,8 @@ static int bba_if_shutdown(netif_t *self) {
 }
 
 static int bba_if_start(netif_t *self) {
+	int i;
+
 	if (!(bba_if.flags & NETIF_INITIALIZED))
 		return -1;
 
@@ -501,8 +539,15 @@ static int bba_if_start(netif_t *self) {
 	   know anything about an activated and yet not-yet-receiving network
 	   adapter =) */
 	/* Spin until the link is stabilized */
-	while (!link_stable)
-		thd_pass();
+	i = 1000;
+	while (!link_stable && i>0) {
+		i--;
+		thd_sleep(10);
+	}
+	if (!link_stable) {
+		dbglog(DBG_ERROR, "bba: timed out waiting for link to stabilize\n");
+		return -1;
+	}
 
 	bba_if.flags |= NETIF_RUNNING;
 	return 0;

@@ -45,6 +45,20 @@ __BEGIN_DECLS
 #define RT_AS_LPAR		0x68		/* Auto-negotiation link partner reg (16 bits) */
 #define RT_AS_EXPANSION		0x6A		/* Auto-negotiation expansion reg (16 bits) */
 
+/* RTL8193C MII (media independent interface) control bits */
+#define RT_MII_AN_START		0x0200		/* Start auto-negotiation */
+#define RT_MII_AN_ENABLE	0x1000		/* Enable auto-negotiation */
+#define RT_MII_RESET		0x8000		/* Reset the MII chip */
+
+/* RTL8193C MII (media independent interface) status bits */
+#define RT_MII_LINK		0x0004		/* Link is present */
+#define RT_MII_AN_CAPABLE	0x0008		/* Can do auto negotiation */
+#define RT_MII_AN_COMPLETE	0x0020		/* Auto-negotiation complete */
+#define RT_MII_10_HALF		0x0800		/* Can do 10Mbit half duplex */
+#define RT_MII_10_FULL		0x1000		/* Can do 10Mbit full */
+#define RT_MII_100_HALF		0x2000		/* Can do 100Mbit half */
+#define RT_MII_100_FULL		0x4000		/* Can do 100Mbit full */
+
 /* RTL8193C command bits; or these together and write teh resulting value
    into CHIPCMD to execute it. */
 #define RT_CMD_RESET		0x10
