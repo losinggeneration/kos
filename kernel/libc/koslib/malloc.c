@@ -1744,6 +1744,9 @@ void public_fREe(Void_t* m) {
 		thd_current->tid, rv, (uint32)m);
 #endif
 
+	if (m == NULL)
+		return;
+
 	ctl = get_memctl(m);
 	if (ctl->magic != BLOCK_MAGIC) {
 #ifndef KM_DBG_VERBOSE
