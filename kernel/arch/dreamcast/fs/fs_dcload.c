@@ -73,12 +73,7 @@ int dcload_write_buffer(const uint8 *data, int len, int xlat) {
 }
 
 int dcload_read_cons() {
-    char buf;
-
-    if (dcload_nbread(1, &buf, 1) < 0)
-	return -1;
-    else
-	return buf;
+    return -1;
 }
 
 static char *dcload_path = NULL;
@@ -158,23 +153,6 @@ ssize_t dcload_read(uint32 hnd, void *buf, size_t cnt) {
     if (hnd) {
 	hnd--; /* KOS uses 0 for error, not -1 */
 	ret = dclsc(DCLOAD_READ, hnd, buf, cnt);
-    }
-    
-    spinlock_unlock(&mutex);
-    return ret;
-}
-
-ssize_t dcload_nbread(uint32 hnd, void *buf, size_t cnt) {
-    ssize_t ret = -1;
-    
-    if (lwip_dclsc && irq_inside_int())
-	return 0;
-
-    spinlock_lock(&mutex);
-    
-    if (hnd) {
-	hnd--; /* KOS uses 0 for error, not -1 */
-	ret = dclsc(DCLOAD_NBREAD, hnd, buf, cnt);
     }
     
     spinlock_unlock(&mutex);
