@@ -4,7 +4,7 @@
 #   
 
 TARGET = kosh.elf
-OBJS = builtin.o chdir.o kosh.o input.o
+OBJS = kosh.o
 
 all: rm-elf $(TARGET)
 
@@ -18,7 +18,7 @@ rm-elf:
 
 $(TARGET): $(OBJS) 
 	$(KOS_CC) $(KOS_CFLAGS) $(KOS_LDFLAGS) -o $(TARGET) $(KOS_START) \
-		$(OBJS) $(OBJEXTRA) -lconio -loggvorbisplay -lm $(KOS_LIBS)
+		$(OBJS) $(OBJEXTRA) -lkosh -lconio -lm $(KOS_LIBS)
 
 run: $(TARGET)
 	$(KOS_LOADER) $(TARGET)

@@ -5,34 +5,48 @@
  */
 
 #include <stdio.h>
-#include "kosh.h"
-#include "chdir.h"
+#include <kos.h>
+#include <kosh/kosh.h>
+#include <conio/conio.h>
 
-/* global exit flag:  if someone sets this we quit */
-volatile int kosh_exit = 0;
-
-int (*oldprintf)(const char *fmt, ...);
+// This example has been completely gutted at this point since all the
+// relevant functionality is now in libconio and libkosh. But those two
+// do a lot more than the original did. "Strike me down, programmer, and
+// I shall only become more powerful!"
+//
+// ...
+//
 
 KOS_INIT_FLAGS(INIT_DEFAULT | INIT_MALLOCSTATS);
 
-/* get all our abi's and then start our main loop */
+void test_builtin(int argc, char **argv) {
+	int i;
+	
+	conio_printf("You passed %d args:\n", argc);
+	for (i=0; i<argc; i++)
+		conio_printf("%s\n", argv[i]);
+}
+
 int main(int argc, char **argv) {
 	pvr_init_defaults();
 
 	printf("kosh starting\n");
 
-	/* initalize the conio service */
+	/* initialize the conio service */
 	conio_init(CONIO_TTY_PVR, CONIO_INPUT_LINE);
-	/* conio_init(CONIO_TTY_SERIAL, CONIO_INPUT_LINE); */
+	// conio_init(CONIO_TTY_SERIAL, CONIO_INPUT_LINE);
 
-	conio_printf("   **** KOSH v1.4, The KallistiOS Shell ****\n");
+	/* initialize kosh */
+	kosh_init();
 
-	/* change directory to the default */
-	chdir("/");
+	/* Add a test builtin */
+	kosh_builtin_add("test", "This is a test command.", test_builtin);
 
-	/* this is the meat */
-	while (!kosh_exit)
-		input_oneloop();
+	/* wait for the user to exit */
+	kosh_join();
+
+	/* shutdown kosh */
+	kosh_shutdown();
 
 	/* shutdown console i/o */
 	conio_shutdown();
