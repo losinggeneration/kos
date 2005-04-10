@@ -179,7 +179,7 @@ static void vmu_block_write_callback(maple_frame_t *frm) {
 	/* Wakey, wakey! */
 	genwait_wake_all(frm);
 }
-int vmu_block_write(maple_device_t * dev, uint16 blocknum, uint8 *buffer) {
+static int vmu_block_write_internal(maple_device_t * dev, uint16 blocknum, uint8 *buffer) {
 	maple_response_t	*resp;
 	int			rv, phase, r;
 	uint32			*send_buf;
@@ -276,6 +276,24 @@ int vmu_block_write(maple_device_t * dev, uint16 blocknum, uint8 *buffer) {
 	}
 	dev->frame.state = MAPLE_FRAME_VACANT;
 
+	return rv;
+}
+
+// Sometimes a flaky or stubborn card can be recovered by trying a couple
+// of times...
+int vmu_block_write(maple_device_t * dev, uint16 blocknum, uint8 *buffer) {
+	int i, rv;
+	for (i=0; i<4; i++) {
+		// Try the write.
+		rv = vmu_block_write_internal(dev, blocknum, buffer);
+		if (rv == MAPLE_EOK)
+			return rv;
+
+		// It failed -- wait a bit and try again.
+		thd_sleep(100);
+	}
+
+	// Well, looks like it's really toasty... return the most recent error.
 	return rv;
 }
 
