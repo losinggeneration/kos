@@ -209,6 +209,7 @@ int scif_init() {
 	SCSMR2 = 0;
 	
 	/* If baudrate unset, set baudrate, N = P0/(32*B)-1 */
+	// B = P0/32*(N+1)
 	if (SCBRR2 == 0xff)
 		SCBRR2 = (50000000 / (32 * serial_baud)) - 1;
 
