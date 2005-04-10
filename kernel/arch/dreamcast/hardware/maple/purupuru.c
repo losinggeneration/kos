@@ -15,6 +15,7 @@ static void purupuru_periodic(maple_driver_t *drv) {
 }
 
 static int purupuru_attach(maple_driver_t *drv, maple_device_t *dev) {
+	dev->status_valid = 1;
 	return 0;
 }
 
