@@ -83,8 +83,9 @@ int vmufs_root_read(maple_device_t * dev, vmu_root_t * root_buf) {
 		dbglog(DBG_ERROR, "vmufs_root_read: can't read block %d on device %c%c\n",
 			255, dev->port+'A', dev->unit+'0');
 		return -1;
-	} else
-		return 0;
+	}
+
+	return 0;
 }
 
 int vmufs_root_write(maple_device_t * dev, vmu_root_t * root_buf) {
@@ -327,6 +328,7 @@ int vmufs_file_write(maple_device_t * dev, vmu_root_t * root, uint16 * fat,
 	vmu_dir_t * dir, vmu_dir_t * newdirent, void * filebuf, int size)
 {
 	int	curblk, blkleft, rv;
+	int	vmuspaceleft;
 	uint8	* out;
 
 	/* Files must be at least one block long */
@@ -347,6 +349,13 @@ int vmufs_file_write(maple_device_t * dev, vmu_root_t * root, uint16 * fat,
 	}
 
 	out = (uint8 *)filebuf;
+
+	/* Don't even start if there isn't enough room to write the whole file */
+	vmuspaceleft = vmufs_fat_free(root, fat);
+	if (vmuspaceleft < size) {
+		dbglog(DBG_INFO, "vmufs_file_write: not enough space for file. Need %d blocks, have %d\n", size, vmuspaceleft);
+		return -2;	/* Same error as is returned if a block can not be found below */
+	}
 
 	/* Find ourselves an open slot for the first block */
 	curblk = newdirent->firstblk = vmufs_find_block(root, fat, newdirent);
@@ -373,10 +382,15 @@ int vmufs_file_write(maple_device_t * dev, vmu_root_t * root, uint16 * fat,
 		/* If we have blocks left, find another free block. Otherwise,
 		   write out a terminator. */
 		if (blkleft) {
-			fat[curblk] = 0;
+			// Set the pointer to the terminator just in case:
+			// a) vmufs_find_block() fails to find a block, AND
+			// b) the calling code for some reason writes the FAT back out anyway.
+			// This may render the save game unusable but at least we won't link
+			// into some other file (or worse, a game!)
+			fat[curblk] = 0xfffa;
 			rv = vmufs_find_block(root, fat, newdirent);
 			if (rv < 0)
-				return curblk;
+				return rv;
 			fat[curblk] = rv;
 			curblk = rv;
 		} else {
@@ -435,7 +449,7 @@ int vmufs_fat_free(vmu_root_t * root, uint16 * fat) {
 	int i, freeblocks;
 
 	freeblocks = 0;
-	for (i=0; i<root->fat_size * 512; i++) {
+	for (i=0; i<root->blk_cnt; i++) {	/* only count user blocks */
 		if (fat[i] == 0xfffc)
 			freeblocks++;
 	}
@@ -701,6 +715,8 @@ int vmufs_write(maple_device_t * dev, const char * fn, void * inbuf, int insize,
 	nd.filesize = insize / 512;
 	nd.hdroff = 0;
 	nd.dirty = 1;
+
+	// If any of these fail, the action to take can be decided by the caller.
 
 	/* Write out the data and update our structs */
 	if (vmufs_file_write(dev, &root, fat, dir, &nd, inbuf, insize / 512) < 0) {
