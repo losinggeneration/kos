@@ -2,12 +2,14 @@
 
    net/broadband_adapter.c
 
-   Copyright (C)2001,2003 Dan Potter
+   Copyright (C)2001,2003,2005 Dan Potter
+   Copyright (C)2004 Vincent Penne
 
  */
 
 #include <stdio.h>
 #include <string.h>
+#include <assert.h>
 #include <dc/net/broadband_adapter.h>
 #include <dc/asic.h>
 #include <dc/g2bus.h>
@@ -17,8 +19,6 @@
 #include <kos/net.h>
 #include <kos/thread.h>
 #include <kos/sem.h>
-
-CVSID("$Id: broadband_adapter.c,v 1.3 2003/07/22 03:31:58 bardtx Exp $");
 
 //#define vid_border_color(r, g, b) (void)0 /* nothing */
 
@@ -466,6 +466,7 @@ static int dma_used;
 
 static uint32 rx_size;
 
+static kthread_t * bba_rx_thread;
 static semaphore_t * bba_rx_sema;
 static int bba_rx_exit_thread;
 static semaphore_t * bba_rx_sema2;
@@ -692,7 +693,7 @@ void bba_unlock() {
 }
 
 static int bcolor;
-static void bba_rx_thread(void *dummy) {
+static void bba_rx_threadfunc(void *dummy) {
 	while (!bba_rx_exit_thread) {
 		//sem_wait_timed(bba_rx_sema, 500);
 		sem_wait(bba_rx_sema);
@@ -886,6 +887,16 @@ static int bba_if_start(netif_t *self) {
 
 	if (!(bba_if.flags & NETIF_INITIALIZED))
 		return -1;
+	if (bba_if.flags & NETIF_RUNNING)
+		return 0;
+
+	// Start the BBA RX thread.
+	assert( bba_rx_thread == NULL );
+	bba_rx_sema = sem_create(0);
+	bba_rx_sema2 = sem_create(1);
+	bba_rx_thread = thd_create(bba_rx_threadfunc, 0);
+	bba_rx_thread->prio = 1;
+	thd_set_label(bba_rx_thread, "BBA-rx-thd");
 
 	/* We need something like this to get DHCP to work (since it doesn't
 	   know anything about an activated and yet not-yet-receiving network
@@ -907,7 +918,19 @@ static int bba_if_start(netif_t *self) {
 
 static int bba_if_stop(netif_t *self) {
 	if (!(bba_if.flags & NETIF_RUNNING))
-		return -1;
+		return 0;
+
+	/* VP : Shutdown rx thread */
+	assert( bba_rx_thread != NULL );
+	bba_rx_exit_thread = 1;
+	sem_signal(bba_rx_sema);
+	sem_signal(bba_rx_sema2);
+	thd_wait(bba_rx_thread);
+	sem_destroy(bba_rx_sema);
+	sem_destroy(bba_rx_sema2);
+
+	bba_rx_sema = bba_rx_sema2 = NULL;
+	bba_rx_thread = NULL;
 
 	bba_if.flags &= ~NETIF_RUNNING;
 	return 0;
@@ -954,11 +977,11 @@ int bba_init() {
 #endif
 
 	/* VP : Initialize rx thread */
-	bba_rx_sema = sem_create(0);
-	bba_rx_sema2 = sem_create(1);
-	kthread_t * thd = thd_create(bba_rx_thread, 0);
-	thd->prio = 1;
-	thd_set_label(thd, "BBA-rx-thd");
+	// Note: The thread itself is not created here, but when we actually
+	// activate the adapter. This way we don't have a spare thread
+	// laying around unless it's actually needed.
+	bba_rx_sema = bba_rx_sema2 = NULL;
+	bba_rx_thread = NULL;
 
 	/* Setup the structure */
 	bba_if.name = "bba";
@@ -1009,15 +1032,6 @@ int bba_shutdown() {
 	/* Shutdown hardware */
 	bba_if.if_stop(&bba_if);
 	bba_if.if_shutdown(&bba_if);
-
-	/* VP : Shutdown rx thread */
-	bba_rx_exit_thread = 1;
-	sem_signal(bba_rx_sema);
-	sem_signal(bba_rx_sema2);
-	while (bba_rx_exit_thread)
-	  thd_pass();
-	sem_destroy(bba_rx_sema);
-	sem_destroy(bba_rx_sema2);
 
 #ifdef TX_SEMA
 	sem_destroy(tx_sema);
