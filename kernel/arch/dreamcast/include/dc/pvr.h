@@ -80,6 +80,40 @@ typedef struct {
 	} txr;
 } pvr_poly_cxt_t;
 
+/* Sprite context; use this somewhat readable format to specify your
+   sprites before compiling them into polygon headers.
+*/
+typedef struct {
+	int		list_type;
+	struct {
+		int		alpha;
+		int		fog_type;
+		int		culling;
+		int		color_clamp;
+		int		clip_mode;
+	} gen;
+	struct {
+		int		src, dst;
+		int		src_enable, dst_enable;
+	} blend;
+	struct {
+		int		comparison;
+		int		write;
+	} depth;
+	struct {
+		int		filter;
+		int		mipmap;
+		int		mipmap_bias;
+		int		uv_flip;
+		int		uv_clamp;
+		int		alpha;
+		int		width;
+		int		height;
+		int		format;
+		pvr_ptr_t	base;
+	} txr;
+} pvr_sprite_cxt_t;
+
 /* Constants for the above structure; thanks to Benoit Miller for these */
 /* list_type */
 #define PVR_LIST_OP_POLY		0	/* opaque poly */
@@ -232,6 +266,14 @@ typedef struct {
 	uint32		d1, d2, d3, d4;		/* dummies */
 } pvr_poly_hdr_t;
 
+/* Polygon header with intensity color. This is the equivalent of
+   pvr_poly_hdr_t, but for use with intensity color (sprites). */
+typedef struct {
+	uint32		cmd;					/* TA command */
+	uint32		mode1, mode2, mode3;	/* mode parameters */
+	float		a, r, g, b;				/* color */
+} pvr_poly_ic_hdr_t;
+
 /* Generic vertex type; the PVR chip itself supports many more vertex
    types, but this is the main one that can be used with both textured
    and non-textured polygons, and is fairly fast. You can find other
@@ -260,6 +302,21 @@ typedef struct {
 	uint32 d1, d2, d3, d4;			/* dummies */
 } pvr_vertex_tpcm_t;
 
+/* Textured sprite. This vertex type is to be used with the intensity
+   colored polygon header and the sprite related commands to draw
+   hardware accelerated, textured sprites. */
+typedef struct {
+	uint32 flags;
+	float ax, ay, az;
+	float bx, by, bz;
+	float cx, cy, cz;
+	float dx, dy;
+	uint32 dummy;
+	uint32 auv;
+	uint32 buv;
+	uint32 cuv;
+} pvr_sprite_txr_t;
+
 /* This vertex is only for modifer volumes */
 typedef struct {
 	uint32 flags;				/* vertex flags */
@@ -276,6 +333,13 @@ typedef struct {
 	( ((uint8)( g * 255 ) ) << 8 ) | \
 	( ((uint8)( b * 255 ) ) << 0 ) )
 
+/* Small function for packing two 32-bit u/v values into
+   two 16-bit u/v values. */
+static inline uint32 PVR_PACK_16BIT_UV(float u, float v) {
+	return ( ((*((uint32 *) &u)) >> 0  ) & 0xFFFF0000 ) |
+	       ( ((*((uint32 *) &v)) >> 16 ) & 0x0000FFFF );
+}
+
 /* ... other vertex structs omitted for now ... */
 
 /* Constants that apply to all primitives */
@@ -284,6 +348,7 @@ typedef struct {
 #define PVR_CMD_VERTEX_EOL	0xf0000000
 #define PVR_CMD_USERCLIP	0x20000000
 #define PVR_CMD_MODIFIER	0x80040000
+#define PVR_CMD_SPRITE		0xA0000000
 
 /* Constants and bitmasks for handling polygon headers; note that thanks
    to the arrangement of constants above, this is mainly a matter of bit
@@ -802,6 +867,14 @@ void pvr_poly_cxt_txr(pvr_poly_cxt_t *dst, pvr_list_t list,
 	int textureformat, int tw, int th, pvr_ptr_t textureaddr,
 	int filtering);
 
+/* Compile a sprite context into a colored polygon header */
+void pvr_sprite_compile(pvr_poly_ic_hdr_t *dst,
+	pvr_sprite_cxt_t *src);
+
+/* Create a textured sprite context */
+void pvr_sprite_cxt_txr(pvr_sprite_cxt_t *dst, pvr_list_t list,
+	int textureformat, int tw, int th, pvr_ptr_t textureaddr,
+	int filtering);
 
 /* Texture handling **************************************************/
 
