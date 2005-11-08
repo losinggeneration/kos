@@ -138,8 +138,8 @@ int net_dev_init() {
 /* Init */
 int net_init() {
 	/* Detect and potentially initialize devices */
-	//if (net_dev_init() < 0)
-	//	return -1;
+	if (net_dev_init() < 0)
+		return -1;
 	
 	/* Initialize the ARP cache */
 	net_arp_init();
