@@ -49,6 +49,12 @@ typedef struct knetif {
 	/* The device's IP address (if any) */
 	uint8				ip_addr[4];
 
+    /* The device's netmask */
+    uint8               netmask[4];
+
+    /* The device's gateway's IP address */
+    uint8               gateway[4];
+
 	/* All of the following callback functions should return a negative
 	   value on failure, and a zero or positive value on success. Some
 	   functions have special values, as noted. */
@@ -178,6 +184,45 @@ int net_input(netif_t *device, const uint8 *data, int len);
 /* Setup an input target; returns the old target */
 net_input_func net_input_set_target(net_input_func t);
 
+/***** net_icmp.c *********************************************************/
+
+/* Type of ping reply callback */
+typedef void (*net_echo_cb)(const uint8 *, uint16, uint64, uint8, const uint8 *, int);
+
+/* Where will we handle possibly notifying the user of ping replies? */
+extern net_echo_cb net_icmp_echo_cb;
+
+/***** net_ipv4.c *********************************************************/
+
+/* Create a 32-bit IP address, based on the individual numbers contained
+   within the ip. */
+uint32 net_ipv4_address(const uint8 addr[4]);
+
+/***** net_udp.c **********************************************************/
+
+/* Init */
+int net_udp_init();
+
+/* Shutdown */
+void net_udp_shutdown();
+
+/* Send a raw UDP packet, without a socket */
+int net_udp_send_raw(netif_t *net, uint16 src_port, uint16 dst_port,
+                     const uint8 dst_ip[4], const uint8 *data, int size);
+
+/* Open a socket between the local system, and a remote host */
+int net_udp_sock_open(uint16 loc_port, uint32 loc_addr, uint16 rem_port,
+                      uint32 rem_addr);
+
+/* Close a previously opened socket */
+int net_udp_sock_close(int sock);
+
+/* Send a packet on a socket */
+int net_udp_send(int sock, const uint8 *data, int size);
+
+/* Recieve a packet on a socket */
+int net_udp_recv(int sock, uint8 *buf, int size);
+
 /***** net_core.c *********************************************************/
 
 /* Interface list; note: do not manipulate directly */
@@ -185,6 +230,12 @@ extern struct netif_list net_if_list;
 
 /* Function to retrieve the list. Again, do not manipulate directly. */
 struct netif_list * net_get_if_list();
+
+/* The default network device, used with sockets. */
+extern netif_t *net_default_dev;
+
+/* Set our default device to an arbitrary device, returns the old device */
+netif_t *net_set_default(netif_t *n);
 
 /* Register a network device */
 int net_reg_device(netif_t *device);
