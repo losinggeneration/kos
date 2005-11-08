@@ -14,6 +14,7 @@
 #include <dc/asic.h>
 #include <dc/g2bus.h>
 #include <dc/sq.h>
+#include <dc/flashrom.h>
 #include <arch/irq.h>
 #include <arch/cache.h>
 #include <kos/net.h>
@@ -967,6 +968,24 @@ static void bba_if_netinput(uint8 *pkt, int pktsize) {
 	net_input(&bba_if, pkt, pktsize);
 }
 
+/* Set ISP configuration from the flashrom, as long as we're configured staticly */
+static void bba_set_ispcfg() {
+    flashrom_ispcfg_t isp;
+
+    if(flashrom_get_ispcfg(&isp) == -1)
+        return;
+
+    if(!isp.ip_valid)
+        return;
+
+    if(isp.method != FLASHROM_ISP_STATIC)
+        return;
+
+    memcpy(bba_if.ip_addr, isp.ip, 4);
+    memcpy(bba_if.netmask, isp.nm, 4);
+    memcpy(bba_if.gateway, isp.gw, 4);
+}
+
 /* Initialize */
 int bba_init() {
 	/* Use the netcore callback */
@@ -991,6 +1010,8 @@ int bba_init() {
 	bba_if.flags = NETIF_NO_FLAGS;
 	bba_get_mac(bba_if.mac_addr);
 	memset(bba_if.ip_addr, 0, sizeof(bba_if.ip_addr));
+    memset(bba_if.netmask, 0, sizeof(bba_if.netmask));
+    memset(bba_if.gateway, 0, sizeof(bba_if.gateway));
 	bba_if.if_detect = bba_if_detect;
 	bba_if.if_init = bba_if_init;
 	bba_if.if_shutdown = bba_if_shutdown;
@@ -1001,6 +1022,8 @@ int bba_init() {
 	bba_if.if_rx_poll = bba_if_rx_poll;
 	bba_if.if_set_flags = bba_if_set_flags;
 
+    /* Attempt to set up our IP address et al from the flashrom */
+    bba_set_ispcfg();
 
 #if 0
 	/* Try to detect/init us */
