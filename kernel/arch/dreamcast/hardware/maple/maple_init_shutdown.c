@@ -17,6 +17,7 @@
 #include <dc/maple/mouse.h>
 #include <dc/maple/vmu.h>
 #include <dc/maple/purupuru.h>
+#include <dc/maple/sip.h>
 
 /*
   This system handles low-level communication/initialization of the maple
@@ -163,6 +164,7 @@ int maple_init() {
 	mouse_init();
 	vmu_init();
 	purupuru_init();
+    sip_init();
 
 	return maple_hw_init();
 }
@@ -170,6 +172,7 @@ int maple_init() {
 /* Full shutdown: shutdown maple operations and known drivers */
 void maple_shutdown() {
 	maple_hw_shutdown();
+    sip_shutdown();
 	purupuru_shutdown();
 	vmu_shutdown();
 	mouse_shutdown();

@@ -61,6 +61,7 @@ __BEGIN_DECLS
 #	include <dc/maple/keyboard.h>
 #	include <dc/maple/mouse.h>
 #	include <dc/maple/vmu.h>
+#   include <dc/maple/sip.h>
 #	include <dc/vmu_pkg.h>
 #	include <dc/spu.h>
 #	include <dc/pvr.h>

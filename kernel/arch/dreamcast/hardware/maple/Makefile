@@ -11,7 +11,7 @@ OBJS := $(OBJS) maple_init_shutdown.o maple_irq.o
 OBJS := $(OBJS) maple_queue.o maple_utils.o
 
 # Various input devices
-OBJS := $(OBJS) controller.o keyboard.o mouse.o purupuru.o
+OBJS := $(OBJS) controller.o keyboard.o mouse.o purupuru.o sip.o
 
 # Output devices
 OBJS := $(OBJS) vmu.o

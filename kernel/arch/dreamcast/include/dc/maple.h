@@ -66,6 +66,7 @@ __BEGIN_DECLS
 #define MAPLE_COMMAND_BWRITE		12
 #define MAPLE_COMMAND_BSYNC		13
 #define MAPLE_COMMAND_SETCOND		14
+#define MAPLE_COMMAND_MICCONTROL    15
 
 /* Function codes; most sources claim that these numbers are little
    endian, and for all I know, they might be; but since it's a bitmask
