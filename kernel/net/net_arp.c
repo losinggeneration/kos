@@ -1,7 +1,9 @@
 /* KallistiOS ##version##
 
-   kernel/net/netarp.c
-   (c)2002 Dan Potter
+   kernel/net/net_arp.c
+
+   Copyright (C) 2002 Dan Potter
+   Copyright (C) 2005 Lawrence Sebald
 */
 
 #include <string.h>
@@ -9,6 +11,7 @@
 #include <stdio.h>
 #include <kos/net.h>
 #include <kos/thread.h>
+#include "net_ipv4.h"
 
 CVSID("$Id: net_arp.c,v 1.1 2002/01/30 06:54:27 bardtx Exp $");
 
@@ -17,6 +20,21 @@ CVSID("$Id: net_arp.c,v 1.1 2002/01/30 06:54:27 bardtx Exp $");
   ARP handling system
  
 */
+
+/* ARP Packet Structre */
+#define packed __attribute__((packed))
+typedef struct {
+	uint8 hw_type[2]    packed;
+	uint8 pr_type[2]    packed;
+	uint8 hw_size       packed;
+	uint8 pr_size       packed;
+	uint8 opcode[2]     packed;
+	uint8 hw_send[6]    packed;
+	uint8 pr_send[4]    packed;
+	uint8 hw_recv[6]    packed;
+	uint8 pr_recv[6]    packed;
+} arp_pkt_t;
+#undef packed
 
 /**************************************************************************/
 /* Variables */
@@ -115,17 +133,108 @@ int net_arp_revlookup(netif_t *nif, uint8 ip_out[4], uint8 mac_in[6]) {
 
 	return -1;
 }
+
+/* Send an ARP reply packet on the specified network adaptor */
+static int net_arp_send(netif_t *nif, arp_pkt_t *pkt)	{
+	arp_pkt_t pkt_out;
+	eth_hdr_t eth_hdr;
+	uint8 buf[sizeof(arp_pkt_t) + sizeof(eth_hdr_t)];
+
+	/* First, fill in the ARP packet. */
+	pkt_out.hw_type[0] = 0;
+	pkt_out.hw_type[1] = 1;
+	pkt_out.pr_type[0] = 0x08;
+	pkt_out.pr_type[1] = 0x00;
+	pkt_out.hw_size = 6;
+	pkt_out.pr_size = 4;
+	pkt_out.opcode[0] = 0;
+	pkt_out.opcode[1] = 2;
+	memcpy(pkt_out.hw_send, nif->mac_addr, 6);
+	memcpy(pkt_out.pr_send, nif->ip_addr, 4);
+	memcpy(pkt_out.pr_recv, pkt->pr_send, 4);
+	memcpy(pkt_out.hw_recv, pkt->hw_send, 6);
+
+	/* Fill in the ethernet header. */
+	memcpy(eth_hdr.src, nif->mac_addr, 6);
+	memcpy(eth_hdr.dest, pkt->hw_send, 6);
+	eth_hdr.type[0] = 0x08; /* ARP */
+	eth_hdr.type[1] = 0x06;
+
+	memcpy(buf, &eth_hdr, sizeof(eth_hdr_t));
+	memcpy(buf + sizeof(eth_hdr_t), &pkt_out, sizeof(arp_pkt_t));
+
+	/* Send it away */
+	nif->if_tx(nif, buf, sizeof(eth_hdr_t) + sizeof(arp_pkt_t), NETIF_BLOCK);
+	
+	return 0;
+}
             
 /* Receive an ARP packet and process it (called by net_input) */
 int net_arp_input(netif_t *nif, const uint8 *pkt_in, int len) {
-	return -1;
+	eth_hdr_t *eth_hdr;
+	arp_pkt_t *pkt;
+
+	eth_hdr = (eth_hdr_t *)pkt_in;
+	pkt = (arp_pkt_t *)(pkt_in + sizeof(eth_hdr_t));
+
+	switch(pkt->opcode[1]) {
+		case 1: /* ARP Request */
+			net_arp_send(nif, pkt);
+		case 2: /* ARP Reply */
+			/* Insert into ARP cache */
+			net_arp_insert(nif, pkt->hw_send, pkt->pr_send, jiffies);
+			break;
+		default:
+			dbglog(DBG_KDEBUG, "net_arp: Unknown ARP Opcode: %d\n", pkt->opcode[1]);
+	}
+
+	return 0;
 }
 
 /* Generate an ARP who-has query on the given device */
 int net_arp_query(netif_t *nif, uint8 ip[4]) {
-	return -1;
-}
+	arp_pkt_t pkt_out;
+	eth_hdr_t eth_hdr;
+	uint8 buf[sizeof(arp_pkt_t) + sizeof(eth_hdr_t)];
 
+	/* First, fill in the ARP packet. */
+	pkt_out.hw_type[0] = 0;
+	pkt_out.hw_type[1] = 1;
+	pkt_out.pr_type[0] = 0x08;
+	pkt_out.pr_type[1] = 0x00;
+	pkt_out.hw_size = 6;
+	pkt_out.pr_size = 4;
+	pkt_out.opcode[0] = 0;
+	pkt_out.opcode[1] = 1;
+	memcpy(pkt_out.hw_send, nif->mac_addr, 6);
+	memcpy(pkt_out.pr_send, nif->ip_addr, 4);
+	memcpy(pkt_out.pr_recv, ip, 4);
+	pkt_out.hw_recv[0] = 0xFF; /* Ethernet broadcast address */
+	pkt_out.hw_recv[1] = 0xFF;
+	pkt_out.hw_recv[2] = 0xFF;
+	pkt_out.hw_recv[3] = 0xFF;
+	pkt_out.hw_recv[4] = 0xFF;
+	pkt_out.hw_recv[5] = 0xFF;
+
+	/* Fill in the ethernet header. */
+	memcpy(eth_hdr.src, nif->mac_addr, 6);
+	eth_hdr.dest[0] = 0xFF; /* Ethernet broadcast address */
+	eth_hdr.dest[1] = 0xFF;
+	eth_hdr.dest[2] = 0xFF;
+	eth_hdr.dest[3] = 0xFF;
+	eth_hdr.dest[4] = 0xFF;
+	eth_hdr.dest[5] = 0xFF;
+	eth_hdr.type[0] = 0x08; /* ARP */
+	eth_hdr.type[1] = 0x06;
+
+	memcpy(buf, &eth_hdr, sizeof(eth_hdr_t));
+	memcpy(buf + sizeof(eth_hdr_t), &pkt_out, sizeof(arp_pkt_t));
+
+	/* Send it away */
+	nif->if_tx(nif, buf, sizeof(eth_hdr_t) + sizeof(arp_pkt_t), NETIF_BLOCK);
+	
+	return 0;
+}
 
 /*****************************************************************************/
 /* Init/shutdown */
@@ -152,6 +261,3 @@ void net_arp_shutdown() {
 
 	LIST_INIT(&net_arp_cache);
 }
-
-
-

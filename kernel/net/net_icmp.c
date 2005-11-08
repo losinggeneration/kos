@@ -1,155 +1,227 @@
 /* KallistiOS ##version##
 
-   net/net_icmp.c
+   kernel/net/net_icmp.c
 
-   (c)2002 Dan Potter
+   Copyright (C) 2002 Dan Potter
+   Copyright (C) 2005 Lawrence Sebald
 
  */
 
 #include <stdio.h>
 #include <string.h>
+#include <malloc.h>
+#include <sys/queue.h>
 #include <kos/net.h>
+#include <kos/thread.h>
+#include <arch/timer.h>
 #include "net_icmp.h"
+#include "net_ipv4.h"
 
 CVSID("$Id: net_icmp.c,v 1.2 2002/03/24 00:27:05 bardtx Exp $");
 
 /*
+This file implements RFC 792, the Internet Control Message Protocol.
+Currently implemented message types are:
+   0  - Echo Reply
+   8  - Echo
 
-This is just a simple stand-in stack for if you enable networking but don't
-setup an actual stack. All this does is respond to ping packets on a given
-interface.
-
-Thanks to AndrewK for these IP structures and the code which I studied to
-create this (dc-load-ip).
-
+Message types that are not implemented yet (if ever):
+   3  - Destination Unreachable
+   4  - Source Quench
+   5  - Redirect
+   11 - Time Exceeded
+   12 - Parameter Problem
+   14 - Timestamp Reply
+   13 - Timestamp
+   15 - Information Request
+   16 - Information Reply
 */
 
-#define packed __attribute__((packed))
-typedef struct {
-	uint8	dest[6]		packed;
-	uint8	src[6]		packed;
-	uint8	type[2]		packed;
-} eth_hdr_t;
+struct __ping_pkt {
+	LIST_ENTRY(__ping_pkt) pkt_list;
+	uint8 ip[4];
+	uint8 *data;
+	int data_sz;
+	uint16 icmp_seq;
+	uint64 usec;
+};
 
-typedef struct {
-	uint8	version_ihl	packed;
-	uint8	tos		packed;
-	uint16	length		packed;
-	uint16	packet_id	packed;
-	uint16	flags_frag_offs	packed;
-	uint8	ttl		packed;
-	uint8	protocol	packed;
-	uint16	checksum	packed;
-	uint32	src		packed;
-	uint32	dest		packed;
-} ip_hdr_t;
+LIST_HEAD(__ping_pkt_list, __ping_pkt);
 
-typedef struct {
-	uint8	type		packed;
-	uint8	code		packed;
-	uint16	checksum	packed;
-	uint32	misc		packed;
-} icmp_hdr_t;
-#undef packed
+static struct __ping_pkt_list pings = LIST_HEAD_INITIALIZER(0);
+static uint8 pktbuf[1514];
+static uint16 icmp_echo_seq = 1;
 
-/* Perform an IP-style checksum on a block of data */
-static uint16 checksum(uint16 *data, int words) {
-	uint32 sum;
-	int i;
-
-	sum = 0;
-	for (i=0; i<words; i++) {
-		sum += data[i];
-		if (sum & 0xffff0000) {
-			sum &= 0xffff;
-			sum++;
-		}
-	}
-
-	return ~(sum & 0xffff);
+static void icmp_default_echo_cb(const uint8 *ip, uint16 seq, uint64 delta_us,
+uint8 ttl, const uint8* data, int data_sz) {
+	printf("%d bytes from %d.%d.%d.%d: icmp_seq=%d ttl=%d time=%.2f ms\n",
+	       data_sz, ip[0], ip[1], ip[2], ip[3], seq, ttl, delta_us / 1000.0f);
 }
 
+/* The default echo (ping) callback */
+net_echo_cb net_icmp_echo_cb = icmp_default_echo_cb;
+
+#if 0
 static uint16 ntohs(uint16 n) {
 	return ((n & 0xff) << 8) | ((n >> 8) & 0xff);
 }
 
-static uint8 pktbuf[1514];
-int net_icmp_input(netif_t *src, uint8 *pkt, int pktsize) {
-	eth_hdr_t	*eth;
-	ip_hdr_t	*ip;
-	icmp_hdr_t	*icmp;
-	int		i;
-	uint8		tmp[6];
-	
-	/* Get pointers */
-	eth = (eth_hdr_t*)(pkt + 0);
-	ip = (ip_hdr_t*)(pkt + sizeof(eth_hdr_t));
+static uint32 ntohl(uint32 n) {
+	return ((n & 0xFF) << 24) | ((n & 0xFF00) << 8) |
+	       ((n >> 8) & 0xFF00) | ((n >> 24) & 0xFF);
+}
+#endif
 
-	/* Non-IP */
-	if (eth->type[0] != 0x08)
-		return 0;
+/* Handle Echo Reply (ICMP type 0) packets */
+static void net_icmp_input_0(netif_t *src, eth_hdr_t *eth, ip_hdr_t *ip,
+                             icmp_hdr_t *icmp, const uint8 *d, int s) {
+	uint64 tmr;
+	struct __ping_pkt *ping;
+	uint16 seq;
 
-	if (eth->type[1] != 0x00)
-		return 0;
+	tmr = timer_us_gettime64();
 
-	/* Ignore fragments */
-	if (ntohs(ip->flags_frag_offs) & 0x3fff)
-		return 0;
+	LIST_FOREACH(ping, &pings, pkt_list) {
+		seq = (d[7] | (d[6] << 8));
+		if(ping->icmp_seq == seq) {
+			net_icmp_echo_cb((uint8 *)&ip->src, seq, tmr - ping->usec, ip->ttl, 
+			                 d, s);
 
-	/* Check ip header checksum */
-	i = ip->checksum;
-	ip->checksum = 0;
-	ip->checksum = checksum((uint16*)ip, 2*(ip->version_ihl & 0x0f));
-	if (i != ip->checksum) {
-		dbglog(DBG_KDEBUG, "net_icmp: ip with invalid checksum\n");
-		return 0;
+			LIST_REMOVE(ping, pkt_list);
+			free(ping->data);
+			free(ping);
+
+			return;
+		}
 	}
+}
 
-	if (ip->protocol != 1)
-		return 0;
+/* Handle Echo (ICMP type 8) packets */
+static void net_icmp_input_8(netif_t *src, eth_hdr_t *eth, ip_hdr_t *ip,
+                             icmp_hdr_t *icmp, const uint8 *d, int s) {
+	uint8 tmp[6];
+	int i;
+
+	/* Set type to echo reply */
+	icmp->type = 0;
+
+	/* Swap source and dest addresses */
+	memcpy(tmp, eth->dest, 6);
+	memcpy(eth->dest, eth->src, 6);
+	memcpy(eth->src, tmp, 6);
+
+	/* Swap source and dest ip addresses */
+	i = ip->src;
+	ip->src = ip->dest;
+	ip->dest = i;
+
+	/* Recompute the IP header checksum */
+	ip->checksum = 0;
+	ip->checksum = net_ipv4_checksum((uint16*)ip, 
+									 2 * (ip->version_ihl & 0x0f));
+
+	/* Recompute the ICMP header checksum */
+	icmp->checksum = 0;
+	icmp->checksum = net_ipv4_checksum((uint16*)icmp, net_ntohs(ip->length) / 2 - 
+									   2 * (ip->version_ihl & 0x0f));
+
+	/* Send it */
+	memcpy(pktbuf, eth, 14);
+	memcpy(pktbuf + 14, ip, 20);
+	memcpy(pktbuf + 14 + 20, d, net_ntohs(ip->length) - 4 * 
+	       (ip->version_ihl & 0x0F));
+	src->if_tx(src, pktbuf, 14 + net_ntohs(ip->length), NETIF_BLOCK);
+}
+
+int net_icmp_input(netif_t *src, eth_hdr_t *eth, ip_hdr_t *ip, const uint8 *d, int s)	{
+	icmp_hdr_t *icmp;
+	int i;
 
 	/* Find ICMP header */
-	icmp = (icmp_hdr_t*)(pkt + sizeof(eth_hdr_t) + 4*(ip->version_ihl & 0x0f));
-	
+	icmp = (icmp_hdr_t*) d;
+
 	/* Check icmp checksum */
-	memset(pktbuf, 0, ntohs(ip->length) + (ntohs(ip->length) % 2)
-		- 4*(ip->version_ihl & 0x0f));
+	memset(pktbuf, 0, 1514);
 	i = icmp->checksum;
 	icmp->checksum = 0;
-	memcpy(pktbuf, icmp, ntohs(ip->length) - 4*(ip->version_ihl & 0x0f));
-	icmp->checksum = checksum((uint16*)pktbuf,
-		(ntohs(ip->length) + 1) / 2 - 2*(ip->version_ihl & 0x0f));
+	memcpy(pktbuf, icmp, net_ntohs(ip->length) - 4*(ip->version_ihl & 0x0f));
+	icmp->checksum = net_ipv4_checksum((uint16*)pktbuf,
+		(net_ntohs(ip->length) + 1) / 2 - 2*(ip->version_ihl & 0x0f));
+
 	if (i != icmp->checksum) {
 		dbglog(DBG_KDEBUG, "net_icmp: icmp with invalid checksum\n");
-	//	return;
+		return -1;
 	}
 
-	if (icmp->type == 8) {	/* echo request */
-		icmp->type = 0;	/* echo reply */
+	switch(icmp->type)	{
+		case 0: /* Echo reply */
+			net_icmp_input_0(src, eth, ip, icmp, d, s);
+			break;
 
-		/* Swap source and dest addresses */
-		memcpy(tmp, eth->dest, 6);
-		memcpy(eth->dest, eth->src, 6);
-		memcpy(eth->src, tmp, 6);
+		case 8: /* Echo */
+			net_icmp_input_8(src, eth, ip, icmp, d, s);
+			break;
 
-		/* Swap source and dest ip addresses */
-		memcpy(&i, &ip->src, 4);
-		memcpy(&ip->src, &ip->dest, 4);
-		memcpy(&ip->dest, &i, 4);
-
-		/* Recompute the IP header checksum */
-		ip->checksum = 0;
-		ip->checksum = checksum((uint16*)ip, 2*(ip->version_ihl & 0x0f));
-
-		/* Recompute the ICMP header checksum */
-		icmp->checksum = 0;
-		icmp->checksum = checksum((uint16*)icmp, ntohs(ip->length)/2 - 2*(ip->version_ihl & 0x0f));
-
-		/* Send it */
-		src->if_tx(src, pkt, sizeof(eth_hdr_t) + ntohs(ip->length), NETIF_BLOCK);
+		default:
+			dbglog(DBG_KDEBUG, "net_icmp: unknown icmp type: %d\n", icmp->type);
 	}
 
 	return 0;
 }
 
+/* Send an ICMP Echo (PING) packet to the specified device */
+int net_icmp_send_echo(netif_t *net, const uint8 ipaddr[4], const uint8 *data, int size) {
+	icmp_hdr_t *icmp;
+	ip_hdr_t ip;
+	struct __ping_pkt *newping;
+	int r = -1;
+	uint8 databuf[sizeof(icmp_hdr_t) + size];
 
+	icmp = (icmp_hdr_t *)databuf;
+
+	/* Fill in the ICMP Header */
+	icmp->type = 8; /* Echo */
+	icmp->code = 0;
+	icmp->checksum = 0;
+	icmp->misc[0] = (uint8) 'D';
+	icmp->misc[1] = (uint8) 'C';
+	icmp->misc[2] = (uint8) (icmp_echo_seq >> 16);
+	icmp->misc[3] = (uint8) (icmp_echo_seq & 0xFF);
+	memcpy(databuf + sizeof(icmp_hdr_t), data, size);
+
+	/* Fill in the IP Header */
+	ip.version_ihl = 0x45; /* 20 byte header, ipv4 */
+	ip.tos = 0;
+	ip.length = net_ntohs(sizeof(icmp_hdr_t) + size + 20);
+	ip.packet_id = 0;
+	ip.flags_frag_offs = 0x0040;
+	ip.ttl = 64;
+	ip.protocol = 1; /* ICMP */
+	ip.checksum = 0;
+	ip.src = net_ntohl(net_ipv4_address(net->ip_addr));
+	ip.dest = net_ntohl(net_ipv4_address(ipaddr));
+
+	/* Compute the ICMP Checksum */
+	icmp->checksum = net_ipv4_checksum((uint16*)databuf, (sizeof(icmp_hdr_t) + size) / 2);
+
+	/* Compute the IP Checksum */
+	ip.checksum = net_ipv4_checksum((uint16*)&ip, sizeof(ip_hdr_t) / 2);
+
+	newping = (struct __ping_pkt*) malloc(sizeof(struct __ping_pkt));
+	newping->data = (uint8 *)malloc(size);
+	newping->data_sz = size;
+	newping->icmp_seq = icmp_echo_seq;
+	memcpy(newping->data, data, size);
+	memcpy(newping->ip, ipaddr, 4);
+	LIST_INSERT_HEAD(&pings, newping, pkt_list);
+
+	++icmp_echo_seq;
+
+	while(r == -1)	{
+		newping->usec = timer_us_gettime64();
+		r = net_ipv4_send_packet(net, &ip, databuf, sizeof(icmp_hdr_t) + size);
+		thd_sleep(10);
+	}
+
+	return 0;
+}

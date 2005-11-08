@@ -1,7 +1,9 @@
 /* KallistiOS ##version##
 
-   kernel/net/netcore.c
-   (c)2002 Dan Potter
+   kernel/net/net_core.c
+
+   Copyright (C) 2002 Dan Potter
+   Copyright (C) 2005 Lawrence Sebald
 */
 
 #include <string.h>
@@ -31,6 +33,9 @@ struct netif_list net_if_list = LIST_HEAD_INITIALIZER(0);
 
 /* ARP cache */        
 struct netarp_list net_arp_cache = LIST_HEAD_INITIALIZER(0);
+
+/* Default net device */
+netif_t *net_default_dev = NULL;
 
 /**************************************************************************/
 /* Driver list management
@@ -89,6 +94,15 @@ struct netif_list * net_get_if_list() {
 /*****************************************************************************/
 /* Init/shutdown */
 
+/* Set default */
+netif_t *net_set_default(netif_t *n)	{
+    netif_t *olddev = net_default_dev;
+
+	net_default_dev = n;
+
+    return olddev;
+}
+
 /* Device detect / init */
 int net_dev_init() {
 	int detected = 0;
@@ -109,6 +123,10 @@ int net_dev_init() {
 			continue;
 		}
 
+        /* Set the first detected device to be the default */
+        if(net_default_dev == NULL)
+            net_set_default(cur);
+
 		detected++;
 	}
 
@@ -120,11 +138,11 @@ int net_dev_init() {
 /* Init */
 int net_init() {
 	/* Detect and potentially initialize devices */
-	if (net_dev_init() < 0)
-		return -1;
+	//if (net_dev_init() < 0)
+	//	return -1;
 	
 	/* Initialize the ARP cache */
-	/* net_arp_init(); */
+	net_arp_init();
 
 	return 0;
 }
@@ -146,8 +164,5 @@ void net_shutdown() {
 	LIST_INIT(&net_if_list);
 
 	/* Shut down the ARP cache */
-	/* net_arp_shutdown(); */
+	net_arp_shutdown();
 }
-
-
-
