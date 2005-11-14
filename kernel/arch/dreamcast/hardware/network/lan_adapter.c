@@ -11,6 +11,7 @@
 #include <assert.h>
 #include <dc/g2bus.h>
 #include <dc/asic.h>
+#include <dc/flashrom.h>
 #include <dc/net/lan_adapter.h>
 #include <arch/irq.h>
 #include <arch/timer.h>
@@ -626,6 +627,24 @@ static int la_if_set_flags(netif_t * self, uint32 flags_and, uint32 flags_or) {
 	return 0;
 }
 
+/* Set ISP configuration from the flashrom, as long as we're configured staticly */
+static void la_set_ispcfg() {
+	flashrom_ispcfg_t isp;
+
+	if(flashrom_get_ispcfg(&isp) == -1)
+		return;
+
+	if(!isp.ip_valid)
+		return;
+
+	if(isp.method != FLASHROM_ISP_STATIC)
+		return;
+
+	memcpy(la_if.ip_addr, isp.ip, 4);
+	memcpy(la_if.netmask, isp.nm, 4);
+	memcpy(la_if.gateway, isp.gw, 4);
+}
+
 /* Initialize */
 int la_init() {
 	/* Initialize our state */
@@ -638,6 +657,8 @@ int la_init() {
 	la_if.dev_id =0 ;
 	la_if.flags = NETIF_NO_FLAGS;
 	memset(la_if.ip_addr, 0, sizeof(la_if.ip_addr));
+	memset(la_if.netmask, 0, sizeof(la_if.netmask));
+	memset(la_if.gateway, 0, sizeof(la_if.gateway));
 	la_if.if_detect = la_if_detect;
 	la_if.if_init = la_if_init;
 	la_if.if_shutdown = la_if_shutdown;
@@ -647,6 +668,9 @@ int la_init() {
 	la_if.if_tx_commit = la_if_tx_commit;
 	la_if.if_rx_poll = la_if_rx_poll;
 	la_if.if_set_flags = la_if_set_flags;
+
+	/* Attempt to set up our IP address et al from the flashrom */
+	la_set_ispcfg();
 
 	/* Append it to the chain */
 	return net_reg_device(&la_if);
