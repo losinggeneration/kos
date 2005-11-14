@@ -86,7 +86,8 @@ static const char *maple_cap_names[] = {
 	"MemoryCard",
 	"Controller",
 	NULL, NULL, NULL, NULL,
-	NULL, NULL,
+	"Camera",
+	NULL,
 	"Mouse",
 	"JumpPack"
 };
