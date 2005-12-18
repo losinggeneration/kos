@@ -455,7 +455,7 @@ static iso_dirent_t *find_object(const char *fn, int dir,
 					else
 						fnlen = strlen(fn);
 				
-					if (!strnicmp(rrname, fn, fnlen)) {
+					if (!strnicmp(rrname, fn, fnlen) && ! *(rrname + fnlen)) {
 						if (!((dir << 1) ^ de->flags))
 							return de;
 					}
@@ -793,11 +793,14 @@ static dirent_t *iso_readdir(void * h) {
 		}
 	}
 
-	if (de->flags & 2)
+	if (de->flags & 2) {
 		fh[fd].dirent.size = -1;
-	else
+		fh[fd].dirent.attr = O_DIR;
+	} else {
 		fh[fd].dirent.size = iso_733(de->size);
-	
+		fh[fd].dirent.attr = 0;
+	}
+
 	fh[fd].ptr += de->length;
 	
 	return &fh[fd].dirent;
