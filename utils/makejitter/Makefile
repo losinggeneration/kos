@@ -1,6 +1,6 @@
 all: makejitter
 
-CFLAGS = -O2 -Wall -I../../include #-g#
+CFLAGS = -O2 -Wall -I../../../kos-ports/include #-g#
 
 makejitter: makejitter.o
 
