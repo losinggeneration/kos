@@ -213,6 +213,15 @@ typedef struct {
 
 	// Non-zero if FSAA was enabled at init time.
 	int		fsaa;
+
+	// Non-zero if we are rendering to a texture
+	int		to_texture;
+
+	// Render pitch for to-texture mode
+	int		to_txr_rp;
+
+	// Output address for to-texture mode
+	uint32		to_txr_addr;
 } pvr_state_t;
 
 /* There will be exactly one of these in KOS (in pvr_globals.c) */

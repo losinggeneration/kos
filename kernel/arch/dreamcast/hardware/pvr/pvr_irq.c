@@ -125,18 +125,22 @@ void pvr_int_handler(uint32 code) {
 
 	// If the render-done interrupt has fired then we are ready to flip to the
 	// new frame buffer.
-	if (pvr_state.render_completed /* && !to_texture */) {
+	if (pvr_state.render_completed) {
 		//DBG(("view(%d)\n", pvr_state.view_target ^ 1));
 
 		// Handle PVR stats
 		pvr_sync_stats(PVR_SYNC_PAGEFLIP);
 
 		// Switch view address to the "good" buffer
-		pvr_state.view_target ^= 1;
+		if(pvr_state.to_texture != 2)
+			pvr_state.view_target ^= 1;
 		pvr_sync_view();
 
 		// Clear the render completed flag.
 		pvr_state.render_completed = 0;
+
+		// Set the fact that the next frame should be texture rendered, if it is the case
+		pvr_state.to_texture = pvr_state.to_texture == 1 ? 2 : 0;
 	}
 
 	// If all lists are fully transferred and a render is not in progress,

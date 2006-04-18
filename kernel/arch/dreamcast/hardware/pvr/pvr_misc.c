@@ -189,20 +189,20 @@ void pvr_begin_queued_render() {
 	/* Finish up rendering the current frame (into the other buffer) */
 	PVR_SET(PVR_ISP_TILEMAT_ADDR, tbuf->tile_matrix);
 	PVR_SET(PVR_ISP_VERTBUF_ADDR, tbuf->vertex);
-	//if (!to_texture)
+	if (!pvr_state.to_texture)
 		PVR_SET(PVR_RENDER_ADDR, rbuf->frame);
-	/* else {
-		SETREG(0x8060, to_txr_addr | (1<<24));
-		SETREG(0x8064, to_txr_addr | (1<<24));
-	} */
+	else {
+		PVR_SET(PVR_RENDER_ADDR, pvr_state.to_txr_addr | (1 << 24));
+		PVR_SET(PVR_RENDER_ADDR_2, pvr_state.to_txr_addr | (1 << 24));
+	}
 	PVR_SET(PVR_BGPLANE_CFG, vert_end);	/* Bkg plane location */
 	PVR_SET(PVR_BGPLANE_Z, *((uint32*)&pvr_state.zclip));
 	PVR_SET(PVR_PCLIP_X, pvr_state.pclip_x);
 	PVR_SET(PVR_PCLIP_Y, pvr_state.pclip_y);
-	//if (!to_texture)
+	if (!pvr_state.to_texture)
 		PVR_SET(PVR_RENDER_MODULO, (pvr_state.w * 2) / 8);
-	/* else
-		SETREG(0x804c, to_txr_rp); */
+	else
+		PVR_SET(PVR_RENDER_MODULO, pvr_state.to_txr_rp);
 	// XXX Do we _really_ need this every time?
 	// SETREG(PVR_FB_CFG_2, 0x00000009);		/* Alpha mode */
 	PVR_SET(PVR_ISP_START, PVR_ISP_START_GO);	/* Start render */

@@ -113,8 +113,23 @@ void pvr_scene_begin() {
    pass in the size of the buffer in rx and ry, and the return values in
    rx and ry will be the size actually used (if changed). Note that
    currently this only supports screen-sized output! */
+/* Currently the resize functionality is not implemented, so make sure that
+   rx and ry are appropriate (i.e. *rx = 1024 and *ry = 512 for 640x480).
+   Also, note that this probably won't work with DMA mode for now... */
 void pvr_scene_begin_txr(pvr_ptr_t txr, uint32 *rx, uint32 *ry) {
-	assert_msg(0, "not implemented yet");
+	/* For the most part, this isn't very much different than the normal render setup.
+	   And, yes, if you remember KOS 1.1.6, this pretty much looks similar to what was
+	   there. I'm quite uncreative with my variable naming ;) */
+	// Mark us as rendering to a texture
+	pvr_state.to_texture = 1;
+
+	// Set the render pitch up
+	pvr_state.to_txr_rp = (*rx) * 2 / 8;
+
+	// Set the output address
+	pvr_state.to_txr_addr = (uint32)(txr) - PVR_RAM_INT_BASE;
+
+	pvr_scene_begin();
 }
 
 /* Begin collecting data for the given list type. Lists do not have to be
