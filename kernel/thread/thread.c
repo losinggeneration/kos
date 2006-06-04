@@ -597,6 +597,13 @@ void thd_sleep(int ms) {
 		return;
 	}
 
+	/* A timeout of zero is the same as thd_pass() and passing zero
+	   down to genwait_wait() causes bad juju. */
+	if (!ms) {
+		thd_pass();
+		return;
+	}
+
 	/* We can genwait on a non-existant object here with a timeout and
 	   have the exact same effect; as a nice bonus, this collapses both
 	   sleep cases into a single case, which is nice for scheduling
