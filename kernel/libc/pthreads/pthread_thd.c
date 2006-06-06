@@ -25,9 +25,8 @@ int pthread_create(pthread_t *thread, const pthread_attr_t  *attr,
 
 int pthread_join(pthread_t thread, void **value_ptr) {
 	assert( thread );
-	assert( value_ptr );
 
-	// XXX Need to get return value.
+	// XXX Need to get return value if value_ptr != NULL.
 	if (thd_wait(thread) < 0)
 		return ESRCH;
 	else
