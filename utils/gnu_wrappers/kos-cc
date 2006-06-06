@@ -15,7 +15,7 @@ for i in $ARGS; do
 			# Partial compile
 			USEMODE=2
 		;;
-		conftest.c)
+		conftest.c | conftest.cc)
 			# Used in autoconf... we really probably need
 			# a better way to do this. (scan for any .c?)
 			USEMODE=1
