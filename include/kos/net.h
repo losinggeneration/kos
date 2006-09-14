@@ -198,6 +198,10 @@ extern net_echo_cb net_icmp_echo_cb;
    within the ip. */
 uint32 net_ipv4_address(const uint8 addr[4]);
 
+/* Parse an IP address that is packet into a uint32 into an array of the
+   individual bytes */
+void net_ipv4_parse_address(uint32 addr, uint8 out[4]);
+
 /***** net_udp.c **********************************************************/
 
 /* Init */
