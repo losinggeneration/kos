@@ -98,6 +98,12 @@ int net_arp_lookup(netif_t *nif, uint8 ip_in[4], uint8 mac_out[6]) {
 	/* Look for the entry */
 	LIST_FOREACH(cur, &net_arp_cache, ac_list) {
 		if (!memcmp(ip_in, cur->ip, 4)) {
+			if(cur->mac[0] == 0 && cur->mac[1] == 0 && 
+			   cur->mac[2] == 0 && cur->mac[3] == 0 &&
+			   cur->mac[4] == 0 && cur->mac[5] == 0) {
+				return -1;
+			}
+
 			memcpy(mac_out, cur->mac, 6);
 			if (cur->timestamp != 0)
 				cur->timestamp = jiffies;
