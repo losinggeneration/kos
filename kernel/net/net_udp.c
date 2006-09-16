@@ -1,295 +1,689 @@
 /* KallistiOS ##version##
 
    kernel/net/net_udp.c
-   Copyright (C) 2005 Lawrence Sebald
+   Copyright (C) 2005, 2006 Lawrence Sebald
 
 */
 
 #include <stdio.h>
 #include <string.h>
 #include <malloc.h>
+#include <arpa/inet.h>
 #include <kos/net.h>
 #include <kos/mutex.h>
+#include <kos/cond.h>
 #include <sys/queue.h>
+#include <kos/dbgio.h>
+#include <kos/fs_socket.h>
+#include <sys/socket.h>
+#include <errno.h>
 #include "net_ipv4.h"
 #include "net_udp.h"
 
-typedef struct udp_pkt {
-	TAILQ_ENTRY(udp_pkt) pkt_queue;
-	udp_hdr_t hdr;
-	uint8 *data;
-	uint16 datasize;
-} udp_pkt_t;
+struct udp_pkt {
+    TAILQ_ENTRY(udp_pkt) pkt_queue;
+    struct sockaddr_in from;
+    uint8 *data;
+    uint16 datasize;
+};
 
 TAILQ_HEAD(udp_pkt_queue, udp_pkt);
 
-typedef struct udp_sock {
-	LIST_ENTRY(udp_sock) sock_list;
-	int sock_num;
-	uint16 loc_port;
-	uint16 rem_port;
-	uint32 loc_addr;
-	uint32 rem_addr;
-	struct udp_pkt_queue packets;
-} udp_sock_t;
+struct udp_sock {
+    LIST_ENTRY(udp_sock) sock_list;
+    struct sockaddr_in local_addr;
+    struct sockaddr_in remote_addr;
+
+    int flags;
+
+    struct udp_pkt_queue packets;
+};
 
 LIST_HEAD(udp_sock_list, udp_sock);
 
-static struct udp_sock_list net_udp_socks = LIST_HEAD_INITIALIZER(0);
-static int cur_udp_sock = 0;
-static uint8 udp_buf[1514];
+static struct udp_sock_list net_udp_sockets = LIST_HEAD_INITIALIZER(0);
+static mutex_t *udp_mutex;
+static condvar_t *udp_packets_ready;
 
-int net_udp_sock_open(uint16 loc_port, uint32 loc_addr, uint16 rem_port, uint32 rem_addr)	{
-	udp_sock_t *ns;
-
-	LIST_FOREACH(ns, &net_udp_socks, sock_list)	{
-		if(ns->loc_port == loc_port && ns->loc_addr == loc_addr && 
-           ns->rem_port == rem_port && ns->rem_addr == rem_addr)	{
-			dbglog(DBG_KDEBUG, "net_udp: Attempt to create already existing socket\n");
-			return 0;
-		}
-	}
-
-	ns = (udp_sock_t *)malloc(sizeof(udp_sock_t));
-
-	ns->sock_num = ++cur_udp_sock;
-	ns->loc_port = loc_port;
-	ns->loc_addr = loc_addr;
-	ns->rem_port = rem_port;
-	ns->rem_addr = rem_addr;
-
-	TAILQ_INIT(&ns->packets);
-	LIST_INSERT_HEAD(&net_udp_socks, ns, sock_list);
-
-	return cur_udp_sock;
+int net_udp_accept(net_socket_t *hnd, struct sockaddr *addr,
+                   socklen_t *addr_len) {
+    errno = EOPNOTSUPP;
+    return -1;
 }
 
-int net_udp_sock_close(int socknum)	{
-	udp_sock_t *ns;
-	udp_pkt_t *pkt;
+int net_udp_bind(net_socket_t *hnd, const struct sockaddr *addr,
+                 socklen_t addr_len) {
+    struct udp_sock *udpsock, *iter;
+    struct sockaddr_in *realaddr;
 
-	LIST_FOREACH(ns, &net_udp_socks, sock_list)	{
-		if(ns->sock_num == socknum)	{
-			LIST_REMOVE(ns, sock_list);
-			TAILQ_FOREACH(pkt, &ns->packets, pkt_queue) {
-				TAILQ_REMOVE(&ns->packets, pkt, pkt_queue);
-				free(pkt->data);
-				free(pkt);
-			}
-			free(ns);
+    /* Verify the parameters sent in first */
+    if(addr == NULL) {
+        errno = EFAULT;
+        return -1;
+    }
 
-			return 0;
-		}
-	}
+    if(addr->sa_family != AF_INET) {
+        errno = EAFNOSUPPORT;
+        return -1;
+    }
 
-	dbglog(DBG_KDEBUG, "net_udp: Attempt to close unopened socket");
-	return -1;
+    /* Get the sockaddr_in structure, rather than the sockaddr one */
+    realaddr = (struct sockaddr_in *) addr;
+
+    mutex_lock(udp_mutex);
+
+    udpsock = (struct udp_sock *)hnd->data;
+    if(udpsock == NULL) {
+        mutex_unlock(udp_mutex);
+        errno = EBADF;
+        return -1;
+    }
+
+    /* See if we requested a specific port or not */
+    if(realaddr->sin_port != 0) {
+        /* Make sure we don't already have a socket bound to the
+           port specified */
+
+        LIST_FOREACH(iter, &net_udp_sockets, sock_list) {
+            if(iter->local_addr.sin_port == realaddr->sin_port) {
+                mutex_unlock(udp_mutex);
+                errno = EADDRINUSE;
+                return -1;
+            }
+        }
+
+        udpsock->local_addr = *realaddr;
+    }
+    else {
+        uint16 port = 1024, tmp = 0;
+
+        /* Grab the first unused port >= 1024. This is, unfortunately, O(n^2) */
+        while(tmp != port) {
+            tmp = port;
+
+            LIST_FOREACH(iter, &net_udp_sockets, sock_list) {
+                if(iter->local_addr.sin_port == port) {
+                    ++port;
+                    break;
+                }
+            }
+        }
+
+        udpsock->local_addr = *realaddr;
+        udpsock->local_addr.sin_port = htons(port);
+    }
+
+    mutex_unlock(udp_mutex);
+
+    return 0;
 }
 
-int net_udp_recv(int sock, uint8 *buf, int size)	{
-	udp_sock_t *ns;
-	udp_pkt_t *pkt;
+int net_udp_connect(net_socket_t *hnd, const struct sockaddr *addr,
+                    socklen_t addr_len) {
+    struct udp_sock *udpsock;
+    struct sockaddr_in *realaddr;
 
-	LIST_FOREACH(ns, &net_udp_socks, sock_list)	{
-		if(ns->sock_num == sock)	{
-			pkt = TAILQ_FIRST(&ns->packets);
-			if(pkt)	{
-				if(size >= pkt->datasize)	{
-					memcpy(buf, pkt->data, pkt->datasize);
-					TAILQ_REMOVE(&ns->packets, pkt, pkt_queue);
-					size = pkt->datasize;
-					free(pkt->data);
-					free(pkt);
-					return size;
-				}
-				else	{
-					uint8 tbuf[pkt->datasize - size];
-					memcpy(buf, pkt->data, size);
-					memcpy(tbuf, pkt->data + size, pkt->datasize - size);
-					free(pkt->data);
-					pkt->data = (uint8 *)malloc(pkt->datasize - size);
-					memcpy(pkt->data, tbuf, pkt->datasize - size);
-					pkt->datasize -= size;
-					return size;
-				}
-			}
-			else	{
-				return 0;
-			}
-		}
-	}
+    if(addr == NULL) {
+        errno = EFAULT;
+        return -1;
+    }
 
-	dbglog(DBG_KDEBUG, "net_udp: attempt to recv on unopened socket\n");
+    if(addr->sa_family != AF_INET) {
+        errno = EAFNOSUPPORT;
+        return -1;
+    }
 
-	return -1;
+    mutex_lock(udp_mutex);
+
+    udpsock = (struct udp_sock *)hnd->data;
+    if(udpsock == NULL) {
+        mutex_unlock(udp_mutex);
+        errno = EBADF;
+        return -1;
+    }
+
+    if(udpsock->remote_addr.sin_addr.s_addr != INADDR_ANY) {
+        mutex_unlock(udp_mutex);
+        errno = EISCONN;
+        return -1;
+    }
+
+    realaddr = (struct sockaddr_in *) addr;
+    if(realaddr->sin_port == 0 || realaddr->sin_addr.s_addr == INADDR_ANY) {
+        mutex_unlock(udp_mutex);
+        errno = EADDRNOTAVAIL;
+        return -1;
+    }
+
+    udpsock->remote_addr.sin_addr.s_addr = realaddr->sin_addr.s_addr;
+    udpsock->remote_addr.sin_port = realaddr->sin_port;
+
+    mutex_unlock(udp_mutex);
+
+    return 0;
 }
 
-int net_udp_send(int sock, const uint8 *data, int size)	{
-	udp_sock_t *ns;
-	
-	LIST_FOREACH(ns, &net_udp_socks, sock_list)	{
-		if(ns->sock_num == sock)	{
-			ip_pseudo_hdr_t *ps = (ip_pseudo_hdr_t *)udp_buf;
-			ip_hdr_t ip;
-			int internsize;
-
-			/* Fill in the UDP Header */
-			ps->src_addr = ns->loc_addr;
-			ps->dst_addr = ns->rem_addr;
-			ps->zero = 0;
-			ps->proto = 17;
-			ps->length = net_ntohs(size + sizeof(udp_hdr_t));
-			ps->src_port = ns->loc_port;
-			ps->dst_port = ns->rem_port;
-			ps->hdrlength = ps->length;
-			ps->checksum = 0;
-			memcpy(ps->data, data, size);
-
-			if(size % 2)	{
-				internsize = size + 1;
-				ps->data[internsize] = 0;
-			}
-			else
-				internsize = size;
-
-			/* Compute the UDP Checksum */
-			ps->checksum = net_ipv4_checksum((uint16 *)udp_buf, (internsize + sizeof(udp_hdr_t) + 12) / 2);
-
-			/* Fill in the IP Header */
-			ip.version_ihl = 0x45; /* 20 byte header, ipv4 */
-			ip.tos = 0;
-			ip.length = net_ntohs(sizeof(udp_hdr_t) + size + 20);
-			ip.packet_id = 0;
-			ip.flags_frag_offs = net_ntohs(0x4000);
-			ip.ttl = 64;
-			ip.protocol = 17; /* UDP */
-			ip.checksum = 0;
-			ip.src = ps->src_addr;
-			ip.dest = ps->dst_addr;
-
-			/* Compute the IP Checksum */
-			ip.checksum = net_ipv4_checksum((uint16*)&ip, sizeof(ip_hdr_t) / 2);
-
-			net_ipv4_send_packet(net_default_dev, &ip, (uint8 *)(udp_buf + 12), sizeof(udp_hdr_t) + size);
-
-			return size;
-		}
-	}
-
-	dbglog(DBG_KDEBUG, "net_udp: attempt to send on unopened socket\n");
-	
-	return -1;	
+int net_udp_listen(net_socket_t *hnd, int backlog) {
+    errno = EOPNOTSUPP;
+    return -1;
 }
 
-int net_udp_input(netif_t *src, eth_hdr_t *eh, ip_hdr_t *ip, const uint8 *data, int size) {
-	ip_pseudo_hdr_t *ps = (ip_pseudo_hdr_t*)udp_buf;
-	uint16 i;
-	udp_sock_t *sock;
-	udp_pkt_t *pkt;
+ssize_t net_udp_recv(net_socket_t *hnd, void *buffer, size_t length, int flags) {
+    struct udp_sock *udpsock;
+    struct udp_pkt *pkt;
 
-	ps->src_addr = ip->src;
-	ps->dst_addr = ip->dest;
-	ps->zero = 0;
-	ps->proto = ip->protocol;
-	memcpy(&ps->src_port, data, size);
-	ps->length = net_ntohs(size);
+    mutex_lock(udp_mutex);
 
-	if(size % 2)	{
-		ps->data[size - sizeof(udp_hdr_t)] = 0;
-		++size;
-	}
+    udpsock = (struct udp_sock *)hnd->data;
+    if(udpsock == NULL) {
+        mutex_unlock(udp_mutex);
+        errno = EBADF;
+        return -1;
+    }
 
-	i = ps->checksum;
-	ps->checksum = 0;
-	ps->checksum = net_ipv4_checksum((uint16 *)udp_buf, (size + 12) / 2);
+    if(udpsock->remote_addr.sin_addr.s_addr == INADDR_ANY ||
+       udpsock->remote_addr.sin_port == 0) {
+        mutex_unlock(udp_mutex);
+        errno = ENOTCONN;
+        return -1;
+    }
 
-#ifdef DEBUG_UDP
-	printf("UDP Header Dump:\n");
-	printf("  Pseudo-Header:\n");
-	printf("src_addr  = 0x%08x\n", ps->src_addr);
-	printf("dst_addr  = 0x%08x\n", ps->dst_addr);
-	printf("zero      = 0x%02x\n", ps->zero);
-	printf("proto     = 0x%02x\n", ps->proto);
-	printf("length    = 0x%04x\n", ps->length);
-	printf("src_port  = 0x%04x\n", ps->src_port);
-	printf("dst_port  = 0x%04x\n", ps->dst_port);
-	printf("hdrlength = 0x%04x\n", ps->hdrlength);
-	printf("checksum  = 0x%04x\n", ps->checksum);
-#endif
+    if(udpsock->flags & SHUT_RD) {
+        mutex_unlock(udp_mutex);
+        return 0;
+    }
 
-	if(i != ps->checksum)	{
-		dbglog(DBG_KDEBUG, "net_udp: discarding UDP packet with invalid checksum\n");
-		dbglog(DBG_KDEBUG, "net_udp:   was %x, expected %x\n", i, ps->checksum);
-		return -1;
-	}
+    if(buffer == NULL) {
+        mutex_unlock(udp_mutex);
+        errno = EFAULT;
+        return -1;
+    }
 
-	LIST_FOREACH(sock, &net_udp_socks, sock_list) {
-		if(sock->loc_port == ps->dst_port && sock->loc_addr == ps->dst_addr && 
-		   ((sock->rem_port == ps->src_port && sock->rem_addr == ps->src_addr) ||
-		   (sock->rem_port == 0 && sock->rem_addr == 0))) {
-			sock->rem_port = ps->src_port;
-			sock->rem_addr = ps->src_addr;
-			pkt = (udp_pkt_t *) malloc(sizeof(udp_pkt_t));
-			pkt->datasize = size - sizeof(udp_hdr_t);
-			pkt->data = (uint8 *) malloc(pkt->datasize);
-			memcpy(&pkt->hdr, &ps->src_port, sizeof(udp_hdr_t));
-			memcpy(pkt->data, ps->data, pkt->datasize);
-			TAILQ_INSERT_TAIL(&sock->packets, pkt, pkt_queue);
-			return 0;			
-		}
-	}
+    if(TAILQ_EMPTY(&udpsock->packets) && (udpsock->flags & O_NONBLOCK)) {
+        mutex_unlock(udp_mutex);
+        errno = EWOULDBLOCK;
+        return -1;
+    }
 
-	dbglog(DBG_KDEBUG, "net_udp: discarding UDP packet for unopened socket\n");
+    if(TAILQ_EMPTY(&udpsock->packets)) {
+        cond_wait(udp_packets_ready, udp_mutex);
+    }
 
-	return 0;
+    pkt = TAILQ_FIRST(&udpsock->packets);
+
+    if(pkt->datasize > length) {
+        memcpy(buffer, pkt->data, length);
+    }
+    else {
+        memcpy(buffer, pkt->data, pkt->datasize);
+        length = pkt->datasize;
+    }
+
+    TAILQ_REMOVE(&udpsock->packets, pkt, pkt_queue);
+    free(pkt->data);
+    free(pkt);
+
+    mutex_unlock(udp_mutex);
+
+    return length;
 }
 
-int net_udp_send_raw(netif_t *net, uint16 src_port, uint16 dst_port, const uint8 ipa[4],
-                     const uint8 *data, int size) {
-	ip_pseudo_hdr_t *ps = (ip_pseudo_hdr_t *)udp_buf;
-	ip_hdr_t ip;
-	int internsize;
+ssize_t net_udp_recvfrom(net_socket_t *hnd, void *buffer, size_t length,
+                         int flags, struct sockaddr *addr,
+                         socklen_t *addr_len) {
+    struct udp_sock *udpsock;
+    struct udp_pkt *pkt;
 
-	/* Fill in the UDP Header */
-	if(net == NULL) /* Sending from the loopback device? */
-		ps->src_addr = 0x0100007f; /* 127.0.0.1 */
-	else
-		ps->src_addr = net_ntohl(net_ipv4_address(net->ip_addr));
-	ps->dst_addr = net_ntohl(net_ipv4_address(ipa));
-	ps->zero = 0;
-	ps->proto = 17;
-	ps->length = net_ntohs(size + sizeof(udp_hdr_t));
-	ps->src_port = net_ntohs(src_port);
-	ps->dst_port = net_ntohs(dst_port);
-	ps->hdrlength = ps->length;
-	ps->checksum = 0;
-	memcpy(ps->data, data, size);
+    mutex_lock(udp_mutex);
 
-	if(size % 2)	{
-		internsize = size + 1;
-		ps->data[internsize] = 0;
-	}
-	else
-		internsize = size;
-	
+    udpsock = (struct udp_sock *)hnd->data;
+    if(udpsock == NULL) {
+        mutex_unlock(udp_mutex);
+        errno = EBADF;
+        return -1;
+    }
 
-	/* Compute the UDP Checksum */
-	ps->checksum = net_ipv4_checksum((uint16 *)udp_buf, (internsize + sizeof(udp_hdr_t) + 12) / 2);
+    if(udpsock->flags & SHUT_RD) {
+        mutex_unlock(udp_mutex);
+        return 0;
+    }
 
-	/* Fill in the IP Header */
-	ip.version_ihl = 0x45; /* 20 byte header, ipv4 */
-	ip.tos = 0;
-	ip.length = net_ntohs(sizeof(udp_hdr_t) + size + 20);
-	ip.packet_id = 0;
-	ip.flags_frag_offs = net_ntohs(0x4000);
-	ip.ttl = 64;
-	ip.protocol = 17; /* UDP */
-	ip.checksum = 0;
-	ip.src = ps->src_addr;
-	ip.dest = ps->dst_addr;
+    if(buffer == NULL || addr_len == NULL) {
+        mutex_unlock(udp_mutex);
+        errno = EFAULT;
+        return -1;
+    }
 
-	/* Compute the IP Checksum */
-	ip.checksum = net_ipv4_checksum((uint16*)&ip, sizeof(ip_hdr_t) / 2);
+    if(TAILQ_EMPTY(&udpsock->packets) && (udpsock->flags & O_NONBLOCK)) {
+        mutex_unlock(udp_mutex);
+        errno = EWOULDBLOCK;
+        return -1;
+    }
 
-	return net_ipv4_send_packet(net, &ip, (uint8 *)(udp_buf + 12), sizeof(udp_hdr_t) + size);
+    while(TAILQ_EMPTY(&udpsock->packets)) {
+        cond_wait(udp_packets_ready, udp_mutex);
+    }
+
+    pkt = TAILQ_FIRST(&udpsock->packets);
+
+    if(pkt->datasize > length) {
+        memcpy(buffer, pkt->data, length);
+    }
+    else {
+        memcpy(buffer, pkt->data, pkt->datasize);
+        length = pkt->datasize;
+    }
+
+    if(addr != NULL) {
+        struct sockaddr_in realaddr;
+
+        realaddr.sin_family = AF_INET;
+        realaddr.sin_addr.s_addr = pkt->from.sin_addr.s_addr;
+        realaddr.sin_port = pkt->from.sin_port;
+        memset(realaddr.sin_zero, 0, 8);
+
+        if(*addr_len < sizeof(struct sockaddr_in)) {
+            memcpy(addr, &realaddr, *addr_len);
+        }
+        else {
+            memcpy(addr, &realaddr, sizeof(struct sockaddr_in));
+            *addr_len = sizeof(struct sockaddr_in);
+        }
+    }
+
+    TAILQ_REMOVE(&udpsock->packets, pkt, pkt_queue);
+    free(pkt->data);
+    free(pkt);
+
+    mutex_unlock(udp_mutex);
+
+    return length;
+}
+
+ssize_t net_udp_send(net_socket_t *hnd, const void *message, size_t length,
+                     int flags) {
+    struct udp_sock *udpsock;
+
+    mutex_lock(udp_mutex);
+
+    udpsock = (struct udp_sock *)hnd->data;
+    if(udpsock == NULL) {
+        mutex_unlock(udp_mutex);
+        errno = EBADF;
+        return -1;
+    }
+
+    if(udpsock->flags & SHUT_WR) {
+        mutex_unlock(udp_mutex);
+        errno = EPIPE;
+        return -1;
+    }
+
+    if(udpsock->remote_addr.sin_addr.s_addr == INADDR_ANY ||
+       udpsock->remote_addr.sin_port == 0) {
+        mutex_unlock(udp_mutex);
+        errno = ENOTCONN;
+        return -1;
+    }
+
+    if(message == NULL) {
+        mutex_unlock(udp_mutex);
+        errno = EFAULT;
+        return -1;
+    }
+
+    if(udpsock->local_addr.sin_port == 0) {
+        uint16 port = 1024, tmp = 0;
+        struct udp_sock *iter;
+
+        /* Grab the first unused port >= 1024. This is, unfortunately, O(n^2) */
+        while(tmp != port) {
+            tmp = port;
+
+            LIST_FOREACH(iter, &net_udp_sockets, sock_list) {
+                if(iter->local_addr.sin_port == port) {
+                    ++port;
+                    break;
+                }
+            }
+        }
+
+        udpsock->local_addr.sin_port = htons(port);
+    }
+
+    mutex_unlock(udp_mutex);
+
+    return net_udp_send_raw(NULL, udpsock->local_addr.sin_addr.s_addr,
+                            udpsock->local_addr.sin_port,
+                            udpsock->remote_addr.sin_addr.s_addr,
+                            udpsock->remote_addr.sin_port, (uint8 *) message,
+                            length);
+}
+
+ssize_t net_udp_sendto(net_socket_t *hnd, const void *message, size_t length,
+                       int flags, const struct sockaddr *addr,
+                       socklen_t addr_len) {
+    struct udp_sock *udpsock;
+    struct sockaddr_in *realaddr;
+
+    mutex_lock(udp_mutex);
+
+    udpsock = (struct udp_sock *)hnd->data;
+    if(udpsock == NULL) {
+        mutex_unlock(udp_mutex);
+        errno = EBADF;
+        return -1;
+    }
+
+    if(udpsock->flags & SHUT_WR) {
+        mutex_unlock(udp_mutex);
+        errno = EPIPE;
+        return -1;
+    }
+
+    if(message == NULL || addr == NULL) {
+        mutex_unlock(udp_mutex);
+        errno = EFAULT;
+        return -1;
+    }
+
+    realaddr = (struct sockaddr_in *) addr;
+
+    if(udpsock->local_addr.sin_port == 0) {
+        uint16 port = 1024, tmp = 0;
+        struct udp_sock *iter;
+
+        /* Grab the first unused port >= 1024. This is, unfortunately, O(n^2) */
+        while(tmp != port) {
+            tmp = port;
+
+            LIST_FOREACH(iter, &net_udp_sockets, sock_list) {
+                if(iter->local_addr.sin_port == port) {
+                    ++port;
+                    break;
+                }
+            }
+        }
+
+        udpsock->local_addr.sin_port = htons(port);
+    }
+
+    mutex_unlock(udp_mutex);
+
+    return net_udp_send_raw(NULL, udpsock->local_addr.sin_addr.s_addr,
+                            udpsock->local_addr.sin_port,
+                            realaddr->sin_addr.s_addr, realaddr->sin_port,
+                            (uint8 *) message, length);
+}
+
+int net_udp_shutdownsock(net_socket_t *hnd, int how) {
+    struct udp_sock *udpsock;
+
+    mutex_lock(udp_mutex);
+
+    udpsock = (struct udp_sock *)hnd->data;
+    if(udpsock == NULL) {
+        mutex_unlock(udp_mutex);
+        errno = EBADF;
+        return -1;
+    }
+
+    if(how & 0xFFFFFFFC) {
+        mutex_unlock(udp_mutex);
+        errno = EINVAL;
+    }
+
+    udpsock->flags |= how;
+
+    mutex_unlock(udp_mutex);
+
+    return 0;
+}
+
+int net_udp_socket(net_socket_t *hnd, int domain, int type, int protocol) {
+    struct udp_sock *udpsock;
+
+    udpsock = (struct udp_sock *) malloc(sizeof(struct udp_sock));
+    if(udpsock == NULL) {
+        errno = ENOMEM;
+        return -1;
+    }
+
+    udpsock->remote_addr.sin_family = AF_INET;
+    udpsock->remote_addr.sin_addr.s_addr = INADDR_ANY;
+    udpsock->remote_addr.sin_port = 0;
+
+    udpsock->local_addr.sin_family = AF_INET;
+    udpsock->local_addr.sin_addr.s_addr = INADDR_ANY;
+    udpsock->local_addr.sin_port = 0;
+
+    udpsock->flags = 0;
+
+    TAILQ_INIT(&udpsock->packets);
+
+    mutex_lock(udp_mutex);
+    LIST_INSERT_HEAD(&net_udp_sockets, udpsock, sock_list);
+    mutex_unlock(udp_mutex);
+
+    hnd->data = udpsock;
+
+    return 0;
+}
+
+void net_udp_close(net_socket_t *hnd) {
+    struct udp_sock *udpsock;
+    struct udp_pkt *pkt;
+
+    mutex_lock(udp_mutex);
+
+    udpsock = (struct udp_sock *)hnd->data;
+    if(udpsock == NULL) {
+        mutex_unlock(udp_mutex);
+        errno = EBADF;
+    }
+
+    TAILQ_FOREACH(pkt, &udpsock->packets, pkt_queue) {
+        free(pkt->data);
+        TAILQ_REMOVE(&udpsock->packets, pkt, pkt_queue);
+        free(pkt);
+    }
+
+    LIST_REMOVE(udpsock, sock_list);
+
+    free(udpsock);
+    mutex_unlock(udp_mutex);
+}
+
+int net_udp_setflags(net_socket_t *hnd, int flags) {
+    struct udp_sock *udpsock;
+
+    mutex_lock(udp_mutex);
+
+    udpsock = (struct udp_sock *) hnd->data;
+    if(udpsock == NULL) {
+        mutex_unlock(udp_mutex);
+        errno = EBADF;
+        return -1;
+    }
+
+    if(flags & (~O_NONBLOCK)) {
+        mutex_unlock(udp_mutex);
+        errno = EINVAL;
+        return -1;
+    }
+
+    udpsock->flags |= flags;
+    mutex_unlock(udp_mutex);
+
+    return 0;
+}
+
+int net_udp_input(netif_t *src, eth_hdr_t *eh, ip_hdr_t *ip, const uint8 *data,
+                  int size) {
+    uint8 buf[size + 13];
+    ip_pseudo_hdr_t *ps = (ip_pseudo_hdr_t *)buf;
+    uint16 checksum;
+    struct udp_sock *sock;
+    struct udp_pkt *pkt;
+
+    ps->src_addr = ip->src;
+    ps->dst_addr = ip->dest;
+    ps->zero = 0;
+    ps->proto = ip->protocol;
+    memcpy(&ps->src_port, data, size);
+    ps->length = htons(size);
+
+    /* check this.... */
+    if(size & 0x01) {
+        ps->data[size - sizeof(udp_hdr_t)] = 0;
+        checksum = ps->checksum;
+        ps->checksum = 0;
+        ps->checksum = net_ipv4_checksum((uint16 *) buf, (size + 13) >> 1);
+    }
+    else {
+        checksum = ps->checksum;
+        ps->checksum = 0;
+        ps->checksum = net_ipv4_checksum((uint16 *) buf, (size + 12) >> 1);
+    }
+
+    if(checksum != ps->checksum) {
+        dbglog(DBG_KDEBUG, "net_udp: discarding UDP packet with invalid "
+                           "checksum\n"
+                           "         calculated 0x%04X, sent 0x%04X\n",
+               ps->checksum, checksum);
+        return -1;
+    }
+
+    if(mutex_trylock(udp_mutex)) {
+        dbglog(DBG_KDEBUG, "net_udp: discarding packet due to locked mutex\n");
+        return -1;
+    }
+
+    LIST_FOREACH(sock, &net_udp_sockets, sock_list) {
+        /* See if we have a socket matching the description provided */
+        if(sock->local_addr.sin_port == ps->dst_port &&
+           ((sock->remote_addr.sin_port == ps->src_port &&
+             sock->remote_addr.sin_addr.s_addr == ps->src_addr) ||
+            (sock->remote_addr.sin_port == 0 &&
+             sock->remote_addr.sin_addr.s_addr == INADDR_ANY))) {
+            pkt = (struct udp_pkt *) malloc(sizeof(struct udp_pkt));
+
+            pkt->datasize = size - sizeof(udp_hdr_t);
+            pkt->data = (uint8 *) malloc(pkt->datasize);
+
+            pkt->from.sin_family = AF_INET;
+            pkt->from.sin_addr.s_addr = ip->src;
+            pkt->from.sin_port = ps->src_port;
+
+            memcpy(pkt->data, ps->data, pkt->datasize);
+
+            TAILQ_INSERT_TAIL(&sock->packets, pkt, pkt_queue);
+
+            cond_broadcast(udp_packets_ready);
+
+            mutex_unlock(udp_mutex);
+
+            return 0;
+        }
+    }
+
+    dbglog(DBG_KDEBUG, "net_udp: Discarding packet for non-opened socket\n");
+    mutex_unlock(udp_mutex);
+
+    return 0;
+}
+
+int net_udp_send_raw(netif_t *net, uint32 src_ip, uint16 src_port,
+                     uint32 dst_ip, uint16 dst_port, const uint8 *data,
+                     int size) {
+    uint8 buf[size + 13 + sizeof(udp_hdr_t)];
+    ip_pseudo_hdr_t *ps = (ip_pseudo_hdr_t *) buf;
+    ip_hdr_t ip;
+
+    if(net == NULL && net_default_dev == NULL) {
+        errno = ENETDOWN;
+        return -1;
+    }
+
+    if(src_ip == INADDR_ANY) {
+        if(net == NULL && net_default_dev != NULL) {
+            ps->src_addr = htonl(net_ipv4_address(net_default_dev->ip_addr));
+        }
+        else if(net != NULL) {
+            ps->src_addr = htonl(net_ipv4_address(net->ip_addr));
+        }
+    }
+    else {
+        ps->src_addr = src_ip;
+    }
+
+    buf[size + 12 + sizeof(udp_hdr_t)] = 0;
+    memcpy(ps->data, data, size);
+    size += sizeof(udp_hdr_t);
+
+    ps->dst_addr = dst_ip;
+    ps->zero = 0;
+    ps->proto = 17;
+    ps->length = htons(size);
+    ps->src_port = src_port;
+    ps->dst_port = dst_port;
+    ps->hdrlength = ps->length;
+    ps->checksum = 0;
+
+    /* Compute the UDP checksum */
+    if(size & 0x01) {
+        ps->checksum = net_ipv4_checksum((uint16 *) buf,
+                                         (size + 13) >> 1);
+    }
+    else {
+        ps->checksum = net_ipv4_checksum((uint16 *) buf,
+                                         (size + 12) >> 1);
+    }
+
+    /* Fill in the IPv4 Header */
+    ip.version_ihl = 0x45;
+    ip.tos = 0;
+    ip.length = htons(size + 20);
+    ip.packet_id = 0;
+    ip.flags_frag_offs = htons(0x4000);
+    ip.ttl = 64;
+    ip.protocol = 17;
+    ip.checksum = 0;
+    ip.src = ps->src_addr;
+    ip.dest = ps->dst_addr;
+
+    /* Compute the IPv4 checksum */
+    ip.checksum = net_ipv4_checksum((uint16 *) &ip, sizeof(ip_hdr_t) >> 1);
+
+    /* send it away.... */
+    if(net_ipv4_send_packet(net, &ip, buf + 12, size)) {
+        /* If net_ipv4_send_packet() returns anything but 0, its an error,
+           errno should be set already from it. */
+        return -1;
+    }
+    else {
+        return size - sizeof(udp_hdr_t);
+    }
+}
+
+int net_udp_init() {
+    udp_mutex = mutex_create();
+
+    if(udp_mutex == NULL) {
+        return -1;
+    }
+
+    udp_packets_ready = cond_create();
+
+    if(udp_packets_ready == NULL) {
+        mutex_destroy(udp_mutex);
+        return -1;
+    }
+
+    return 0;
+}
+
+void net_udp_shutdown() {
+    mutex_destroy(udp_mutex);
+    cond_destroy(udp_packets_ready);
 }

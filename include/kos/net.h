@@ -210,23 +210,6 @@ int net_udp_init();
 /* Shutdown */
 void net_udp_shutdown();
 
-/* Send a raw UDP packet, without a socket */
-int net_udp_send_raw(netif_t *net, uint16 src_port, uint16 dst_port,
-                     const uint8 dst_ip[4], const uint8 *data, int size);
-
-/* Open a socket between the local system, and a remote host */
-int net_udp_sock_open(uint16 loc_port, uint32 loc_addr, uint16 rem_port,
-                      uint32 rem_addr);
-
-/* Close a previously opened socket */
-int net_udp_sock_close(int sock);
-
-/* Send a packet on a socket */
-int net_udp_send(int sock, const uint8 *data, int size);
-
-/* Recieve a packet on a socket */
-int net_udp_recv(int sock, uint8 *buf, int size);
-
 /***** net_core.c *********************************************************/
 
 /* Interface list; note: do not manipulate directly */

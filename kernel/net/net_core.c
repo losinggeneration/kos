@@ -10,6 +10,7 @@
 #include <malloc.h>
 #include <stdio.h>
 #include <kos/net.h>
+#include <kos/fs_socket.h>
 
 CVSID("$Id: net_core.c,v 1.5 2002/10/26 07:59:50 bardtx Exp $");
 
@@ -100,7 +101,7 @@ netif_t *net_set_default(netif_t *n)	{
 
 	net_default_dev = n;
 
-    return olddev;
+	return olddev;
 }
 
 /* Device detect / init */
@@ -144,6 +145,11 @@ int net_init() {
 	/* Initialize the ARP cache */
 	net_arp_init();
 
+	/* Initialize the UDP system */
+	net_udp_init();
+
+	fs_socket_init();
+
 	return 0;
 }
 
@@ -165,4 +171,9 @@ void net_shutdown() {
 
 	/* Shut down the ARP cache */
 	net_arp_shutdown();
+
+	/* Shut down the UDP system */
+	net_udp_shutdown();
+
+	fs_socket_shutdown();
 }
