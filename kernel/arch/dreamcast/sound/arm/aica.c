@@ -207,8 +207,13 @@ void aica_freq(int ch) {
 
 /* Get channel position */
 int aica_get_pos(int ch) {
+	int i;
+
 	/* Observe channel ch */
 	SNDREG8(0x280d) = ch;
+
+	/* Wait a while */
+	for (i = 0; i < 20; i++);
 	
 	/* Update position counters */
 	chans[ch].pos = SNDREG32(0x2814) & 0xffff;

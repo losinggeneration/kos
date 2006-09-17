@@ -178,7 +178,7 @@ int arm_main() {
 	/* Wait for a command */
 	for( ; ; ) {
 		/* Update channel position counters */
-		for (i=0; i<2; i++)
+		for (i=0; i<64; i++)
 			aica_get_pos(i);
 
 		/* Check for a command */
