@@ -128,7 +128,8 @@ static uint32 romdisk_find_object(rd_image_t * mnt, const char *fn, int fnlen, i
 		}
 		
 		/* Check filename */
-		if (!strncasecmp(fhdr->filename, fn, fnlen)) {
+		if ((strlen(fhdr->filename) == fnlen) && (!strncasecmp(fhdr->filename, fn, fnlen))) {
+
 			/* Match: return this index */
 			return i;
 		}
