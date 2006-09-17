@@ -11,5 +11,6 @@
 #define __KOS_LIMITS_H
 
 #define MAX_FN_LEN	256		/* Max filename length */
+#define PATH_MAX	4095		/* Max path length */
 
 #endif	/* __KOS_LIMITS_H */
