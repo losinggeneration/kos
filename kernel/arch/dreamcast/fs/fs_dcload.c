@@ -275,9 +275,10 @@ dirent_t *dcload_readdir(uint32 hnd) {
 	strcat(fn, dcld->d_name);
 
 	if (!dclsc(DCLOAD_STAT, fn, &filestat)) {
-	    if (filestat.st_mode & S_IFDIR)
+	    if (filestat.st_mode & S_IFDIR) {
 		rv->size = -1;
-	    else
+		rv->attr = O_DIR;
+	    } else
 		rv->size = filestat.st_size;
 	    rv->time = filestat.st_mtime;
 	    
