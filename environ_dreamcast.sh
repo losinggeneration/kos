@@ -13,5 +13,5 @@ if [ x${KOS_ARCH} = xdreamcast ]; then
 	export DC_ARM_OBJCOPY="${DC_ARM_BASE}/bin/${DC_ARM_PREFIX}-objcopy"
 	export DC_ARM_LD="${DC_ARM_BASE}/bin/${DC_ARM_PREFIX}-ld"
 	export DC_ARM_CFLAGS="-mcpu=arm7 -Wall -O2"
-	export DC_ARM_AFLAGS="-marm7"
+	export DC_ARM_AFLAGS="-mcpu=arm7"
 fi
