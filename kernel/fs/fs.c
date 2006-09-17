@@ -31,6 +31,8 @@ something like this:
 #include <string.h>
 #include <assert.h>
 #include <errno.h>
+#include <stdlib.h>
+#include <limits.h>
 #include <kos/fs.h>
 #include <kos/thread.h>
 #include <kos/mutex.h>
@@ -91,21 +93,6 @@ static dirent_t *fs_root_readdir(fs_hnd_t * handle) {
 	return &root_readdir_dirent;
 }
 
-/* Resolve a relative path into a regular path */
-static void fs_resolve_relative(const char *fn, char *rfn) {
-	/* For now we don't do anything but tack on the thread's
-	   pwd to the front of the filename. Later we need to do
-	   resolution of '..' and so on. */
-	const char *root;
-
-	root = thd_get_pwd(thd_get_current());
-
-	/* Copy in the path names, careful of buffer limitations */		
-	strncpy(rfn, root, 255);
-	strcat(rfn, "/");
-	strncat(rfn, fn, (255 - strlen(rfn)) - 1);
-}
-
 /* This version of open deals with raw handles only. This is below the level
    of file descriptors. It is used by the standard fs_open below. The
    returned handle will have no references attached to it. */
@@ -115,10 +102,13 @@ static fs_hnd_t * fs_hnd_open(const char *fn, int mode) {
 	const char	*cname;
 	void		*h;
 	fs_hnd_t	*hnd;
-	char		rfn[256];
+	char		rfn[PATH_MAX];
+
+	if (!realpath(fn, rfn))
+		return NULL;
 
 	/* Are they trying to open the root? */
-	if (!strcmp(fn, "/")) {
+	if (!strcmp(rfn, "/")) {
 		if ((mode & O_DIR)) 
 			return fs_root_opendir();
 		else {
@@ -127,14 +117,8 @@ static fs_hnd_t * fs_hnd_open(const char *fn, int mode) {
 		}
 	}
 
-	/* Are they using a relative path? */
-	if (fn[0] != '/') {
-		fs_resolve_relative(fn, rfn);
-		fn = (const char *)rfn;
-	}
-
 	/* Look for a handler */
-	nmhnd = nmmgr_lookup(fn);
+	nmhnd = nmmgr_lookup(rfn);
 	if (nmhnd == NULL || nmhnd->type != NMMGR_TYPE_VFS) {
 		errno = ENOENT;
 		return NULL;
@@ -142,7 +126,7 @@ static fs_hnd_t * fs_hnd_open(const char *fn, int mode) {
 	cur = (vfs_handler_t *)nmhnd;
 
 	/* Found one -- get the "canonical" path name */
-	cname = fn + strlen(nmhnd->pathname);
+	cname = rfn + strlen(nmhnd->pathname);
 
 	/* Invoke the handler */
 	if (cur->open == NULL) {
@@ -427,15 +411,19 @@ static vfs_handler_t * fs_verify_handler(const char * fn) {
 
 int fs_rename(const char *fn1, const char *fn2) {
 	vfs_handler_t	*fh1, *fh2;
+	char		rfn1[PATH_MAX], rfn2[PATH_MAX];
 	
+	if (!realpath(fn1, rfn1) || !realpath(fn2, rfn2))
+		return -1;
+
 	/* Look for handlers */
-	fh1 = fs_verify_handler(fn1);
+	fh1 = fs_verify_handler(rfn1);
 	if (fh1 == NULL) {
 		errno = ENOENT;
 		return -1;
 	}
 	
-	fh2 = fs_verify_handler(fn1);
+	fh2 = fs_verify_handler(rfn2);
 	if (fh2 == NULL) {
 		errno = ENOENT;
 		return -1;
@@ -447,8 +435,8 @@ int fs_rename(const char *fn1, const char *fn2) {
 	}
 
 	if (fh1->rename)
-		return fh1->rename(fh1, fn1+strlen(fh1->nmmgr.pathname),
-			fn2+strlen(fh1->nmmgr.pathname));
+		return fh1->rename(fh1, rfn1+strlen(fh1->nmmgr.pathname),
+			rfn2+strlen(fh1->nmmgr.pathname));
 	else {
 		errno = EINVAL;
 		return -1;
@@ -457,13 +445,17 @@ int fs_rename(const char *fn1, const char *fn2) {
 
 int fs_unlink(const char *fn) {
 	vfs_handler_t	*cur;
-	
+	char		rfn[PATH_MAX];
+
+	if (!realpath(fn, rfn))
+		return -1;
+
 	/* Look for a handler */
-	cur = fs_verify_handler(fn);
+	cur = fs_verify_handler(rfn);
 	if (cur == NULL) return 1;
 
 	if (cur->unlink)
-		return cur->unlink(cur, fn+strlen(cur->nmmgr.pathname));
+		return cur->unlink(cur, rfn+strlen(cur->nmmgr.pathname));
 	else {
 		errno = EINVAL;
 		return -1;
@@ -471,7 +463,12 @@ int fs_unlink(const char *fn) {
 }
 
 int fs_chdir(const char *fn) {
-	thd_set_pwd(thd_get_current(), fn);
+	char		rfn[PATH_MAX];
+
+	if (!realpath(fn, rfn))
+		return -1;
+
+	thd_set_pwd(thd_get_current(), rfn);
 	return 0;
 }
 
@@ -503,13 +500,17 @@ int fs_complete(file_t fd, ssize_t * rv) {
 
 int fs_stat(const char * fn, stat_t * rv) {
 	vfs_handler_t	*cur;
-	
+	char		rfn[PATH_MAX];
+
+	if (!realpath(fn, rfn))
+		return -1;
+
 	/* Look for a handler */
-	cur = fs_verify_handler(fn);
+	cur = fs_verify_handler(rfn);
 	if (cur == NULL) return -1;
 
 	if (cur->stat)
-		return cur->stat(cur, fn+strlen(cur->nmmgr.pathname), rv);
+		return cur->stat(cur, rfn+strlen(cur->nmmgr.pathname), rv);
 	else {
 		errno = EINVAL;
 		return -1;
@@ -518,13 +519,17 @@ int fs_stat(const char * fn, stat_t * rv) {
 
 int fs_mkdir(const char * fn) {
 	vfs_handler_t	*cur;
-	
+	char		rfn[PATH_MAX];
+
+	if (!realpath(fn, rfn))
+		return -1;
+
 	/* Look for a handler */
-	cur = fs_verify_handler(fn);
+	cur = fs_verify_handler(rfn);
 	if (cur == NULL) return -1;
 
 	if (cur->mkdir)
-		return cur->mkdir(cur, fn+strlen(cur->nmmgr.pathname));
+		return cur->mkdir(cur, rfn+strlen(cur->nmmgr.pathname));
 	else {
 		errno = EINVAL;
 		return -1;
@@ -533,13 +538,17 @@ int fs_mkdir(const char * fn) {
 
 int fs_rmdir(const char * fn) {
 	vfs_handler_t	*cur;
-	
+	char		rfn[PATH_MAX];
+
+	if (!realpath(fn, rfn))
+		return -1;
+
 	/* Look for a handler */
-	cur = fs_verify_handler(fn);
+	cur = fs_verify_handler(rfn);
 	if (cur == NULL) return -1;
 
 	if (cur->rmdir)
-		return cur->rmdir(cur, fn+strlen(cur->nmmgr.pathname));
+		return cur->rmdir(cur, rfn+strlen(cur->nmmgr.pathname));
 	else {
 		errno = EINVAL;
 		return -1;
