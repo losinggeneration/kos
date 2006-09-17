@@ -14,6 +14,6 @@ endif
 
 include $(KOS_BASE)/Makefile.prefab
 
-snd_stream_drv.o: arm/stream.drv
-	$(KOS_BASE)/utils/bin2o/bin2o $< snd_stream_drv snd_stream_drv.o
+snd_stream_drv.o: subdirs arm/stream.drv
+	$(KOS_BASE)/utils/bin2o/bin2o arm/stream.drv snd_stream_drv snd_stream_drv.o
 
