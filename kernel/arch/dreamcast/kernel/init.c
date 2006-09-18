@@ -133,7 +133,9 @@ void arch_auto_shutdown() {
 	snd_shutdown();
 	timer_shutdown();
 	hardware_shutdown();
-	net_shutdown();
+	if (__kos_init_flags & INIT_NET) {
+		net_shutdown();
+	}
 	pvr_shutdown();
 	library_shutdown();
 	fs_dcload_shutdown();
