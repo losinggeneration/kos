@@ -62,10 +62,11 @@ realpath(const char *path, char resolved[PATH_MAX])
 		resolved_len = 1;
 		left_len = strlcpy(left, path + 1, sizeof(left));
 	} else {
-		if (getcwd(resolved, PATH_MAX) == NULL) {
+		/* if (getcwd(resolved, PATH_MAX) == NULL) {
 			strlcpy(resolved, ".", PATH_MAX);
 			return (NULL);
-		}
+		} */
+		strcpy(resolved, fs_getwd());
 		resolved_len = strlen(resolved);
 		left_len = strlcpy(left, path, sizeof(left));
 	}
