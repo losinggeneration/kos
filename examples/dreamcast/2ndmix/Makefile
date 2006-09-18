@@ -20,7 +20,7 @@ rm-elf:
 	rm -f romdisk.img
 
 2ndmix.elf: $(OBJS)
-	$(KOS_CC) $(KOS_CFLAGS) $(KOS_LDFLAGS) -o 2ndmix.elf $(KOS_START) $(OBJS) $(KOS_LIBS)
+	kos-cc -o 2ndmix.elf $(OBJS)
 
 run: 2ndmix.elf
 	$(KOS_LOADER) 2ndmix.elf

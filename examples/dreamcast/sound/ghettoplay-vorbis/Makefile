@@ -11,8 +11,7 @@ clean: rm-elf
 	-rm -f $(OBJS)
 	
 $(TARGET): $(OBJS)
-	$(KOS_CC) $(KOS_CFLAGS) $(KOS_LDFLAGS) -o $(TARGET) $(KOS_START) \
-		$(OBJS) $(DATAOBJS) $(OBJEXTRA) -loggvorbisplay -lm $(KOS_LIBS)
+	kos-cc -o $(TARGET) $(OBJS) -loggvorbisplay -lm
 
 romdisk.img:
 	$(KOS_GENROMFS) -f romdisk.img -d romdisk -v

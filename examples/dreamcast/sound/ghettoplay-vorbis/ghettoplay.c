@@ -113,6 +113,7 @@ int main(int argc, char **argv) {
 	pvr_init_defaults();
 
 	/* Initialize oggvorbis player thread */
+	snd_stream_init();
 	sndoggvorbis_init();
 
 	/* Setup the mouse/font texture */

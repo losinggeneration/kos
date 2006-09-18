@@ -52,7 +52,7 @@ static int takeframes = 0;
 static int curpos = 0;
 static int filtinitted = 0;
 
-static void snd_hook(void * obj, int freq, int chn, void ** buf, int *req) {
+static void snd_hook(int strm, void * obj, int freq, int chn, void ** buf, int *req) {
 	int actual;
 	uint64 t;
 
@@ -395,7 +395,7 @@ void song_menu_render() {
 		hookmut = mutex_create();
 	}
 	if (!filtinitted) {
-		snd_stream_filter_add(snd_hook, NULL);
+		snd_stream_filter_add(0, snd_hook, NULL);
 		filtinitted = 1;
 	}
 
