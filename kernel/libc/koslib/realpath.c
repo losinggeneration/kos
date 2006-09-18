@@ -30,6 +30,7 @@
 
 #include <sys/param.h>
 #include <sys/stat.h>
+#include <kos/limits.h>
 
 #include <errno.h>
 #include <stdlib.h>
