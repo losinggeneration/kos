@@ -10,6 +10,8 @@
 extern uint8 romdisk[];
 KOS_INIT_ROMDISK(romdisk);
 
+#define false (1 == 0)
+
 int main(int argc, char **argv) {
 	file_t f;
 	void *subelf;

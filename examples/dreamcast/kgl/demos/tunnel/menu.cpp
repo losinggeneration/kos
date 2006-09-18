@@ -38,6 +38,13 @@ void Menu::add(int min, int max, int amt, int* pval, char *pformat) {
 	memcpy(madd->pformat, pformat, strlen(pformat)+1);
 	printf("[i**]menu->add = %d\n", strlen(pformat)+1);
 }
+
+// lvalue cast fix for C++, as proposed by Jim Ursetto
+// http://sourceforge.net/mailarchive/message.php?msg_id=9293303
+template <typename T, typename X> inline T& lvalue_cast(X& x) {
+        return *( reinterpret_cast<T*>(&x) );  // *((T *)& x)
+}
+
 void Menu::add(float min, float max, float amt, float* pval, char *pformat) {
 	Menuitem_t* madd;
 	if (mlist == NULL) {
@@ -56,7 +63,7 @@ void Menu::add(float min, float max, float amt, float* pval, char *pformat) {
 	uf2i.f = min; madd->min = uf2i.i;
 	uf2i.f = max; madd->max = uf2i.i;
 	uf2i.f = amt; madd->amt = uf2i.i;
-	(float *)madd->pvalue = (float *)pval;
+	lvalue_cast<float *>(madd->pvalue) = pval;
 	madd->pformat = (char*) malloc(strlen(pformat)+1); 
 	memcpy(madd->pformat, pformat, strlen(pformat)+1);
 	printf("[f**]menu->add = %d\n", strlen(pformat)+1);

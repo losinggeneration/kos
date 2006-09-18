@@ -26,7 +26,7 @@ $(TARGET): $(OBJS) romdisk.o
 $(SUBTARGET): $(SUBOBJS)
 	$(KOS_CC) $(KOS_CFLAGS) $(KOS_LDFLAGS) -o sub.elf $(KOS_START) \
 		$(SUBOBJS) $(OBJEXTRA) $(KOS_LIBS)
-	$(KOS_OBJCOPY) -O binary sub.elf $(SUBTARGET)
+	$(KOS_OBJCOPY) -O binary -R .stack sub.elf $(SUBTARGET)
 
 # You can safely remove the next two targets if you don't use a ROMDISK
 romdisk.img: $(SUBTARGET)

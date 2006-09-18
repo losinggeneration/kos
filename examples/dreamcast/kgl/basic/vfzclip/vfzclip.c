@@ -11,6 +11,9 @@
 
 #define SDIFF 0.001f
 
+#define true (1 == 1)
+#define false (1 == 0)
+
 CVSID("$Id");
 
 /*

@@ -34,9 +34,6 @@ static void laction (int i);
 static lua_Hook old_linehook = NULL;
 static lua_Hook old_callhook = NULL;
 
-int errno = 0;
-int _impure_ptr = 0;
-
 static void userinit (void) {
   lua_baselibopen(L);
   lua_iolibopen(L);

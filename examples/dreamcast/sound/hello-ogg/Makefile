@@ -18,9 +18,8 @@ clean:
 # You can choose a decoder to test below. Tremor is the integer-only
 # version, and oggvorbisplay is the full FP version.
 $(TARGET): $(OBJS) 
-	$(KOS_CC) $(KOS_CFLAGS) $(KOS_LDFLAGS) -o $(TARGET) $(KOS_START) \
-	$(OBJS)  $(DATAOBJS) $(OBJEXTRA) -L$(KOS_BASE)/lib -ltremor -lm -lkallisti -lgcc 
-#	$(OBJS)  $(DATAOBJS) $(OBJEXTRA) -L$(KOS_BASE)/lib -loggvorbisplay -lm -lkallisti -lgcc 
+	kos-cc -o $(TARGET) $(OBJS) $(DATAOBJS) $(OBJEXTRA) -ltremor -lm
+#	kos-cc -o $(TARGET) $(OBJS) $(DATAOBJS) $(OBJEXTRA) -loggvorbisplay -lm
 
 romdisk.img:
 	$(KOS_GENROMFS) -f romdisk.img -d romdisk -v
