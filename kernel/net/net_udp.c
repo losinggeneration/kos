@@ -42,8 +42,8 @@ struct udp_sock {
 LIST_HEAD(udp_sock_list, udp_sock);
 
 static struct udp_sock_list net_udp_sockets = LIST_HEAD_INITIALIZER(0);
-static mutex_t *udp_mutex;
-static condvar_t *udp_packets_ready;
+static mutex_t *udp_mutex = NULL;
+static condvar_t *udp_packets_ready = NULL;
 
 int net_udp_accept(net_socket_t *hnd, struct sockaddr *addr,
                    socklen_t *addr_len) {
@@ -677,6 +677,8 @@ int net_udp_init() {
 
     if(udp_packets_ready == NULL) {
         mutex_destroy(udp_mutex);
+        udp_mutex = NULL;
+
         return -1;
     }
 
@@ -684,6 +686,9 @@ int net_udp_init() {
 }
 
 void net_udp_shutdown() {
-    mutex_destroy(udp_mutex);
-    cond_destroy(udp_packets_ready);
+    if(udp_mutex != NULL)
+        mutex_destroy(udp_mutex);
+
+    if(udp_packets_ready != NULL)
+        cond_destroy(udp_packets_ready);
 }

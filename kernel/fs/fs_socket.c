@@ -50,7 +50,7 @@ static off_t fs_socket_tell(void *hnd) {
 static vfs_handler_t vh = {
     /* Name handler */
     {
-        { 0 },          /* Name */
+        "/sock",        /* Name */
         0,              /* tbfi */
         0x00010000,     /* Version 1.0 */
         0,              /* Flags */
