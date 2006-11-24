@@ -71,15 +71,12 @@ $(kos_patches):
 # ---- build {{{
 
 build: build-sh4 build-arm
-# build-sh4: build-sh4-binutils build-sh4-gcc
-build-sh4: build-sh4-gcc
+build-sh4: build-sh4-binutils build-sh4-gcc
 build-arm: build-arm-binutils build-arm-gcc
-# build-sh4-gcc: build-sh4-gcc-pass1 build-sh4-newlib build-sh4-gcc-pass2
-build-sh4-gcc: build-sh4-newlib build-sh4-gcc-pass2
+build-sh4-gcc: build-sh4-gcc-pass1 build-sh4-newlib build-sh4-gcc-pass2
 build-arm-gcc: build-arm-gcc-pass1
 	$(clean_arm_hack)
-#build-sh4-newlib: build-sh4-newlib-only fixup-sh4-newlib
-build-sh4-newlib: fixup-sh4-newlib
+build-sh4-newlib: build-sh4-newlib-only fixup-sh4-newlib
 
 # Ensure that, no matter where we enter, prefix and target are set correctly.
 build_sh4_targets=build-sh4-binutils build-sh4-gcc build-sh4-gcc-pass1 build-sh4-newlib build-sh4-newlib-only build-sh4-gcc-pass2
