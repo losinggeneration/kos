@@ -47,7 +47,4 @@ uint16 net_ipv4_checksum(const uint16 *data, int words);
 int net_ipv4_send_packet(netif_t *net, ip_hdr_t *hdr, const uint8 *data, int size);
 int net_ipv4_input(netif_t *src, const uint8 *pkt, int pktsize);
 
-uint16 net_ntohs(uint16 n);
-uint32 net_ntohl(uint32 n);
-
 #endif /* __LOCAL_NET_IPV4_H */

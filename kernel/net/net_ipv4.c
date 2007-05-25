@@ -18,15 +18,6 @@
 #include "net_icmp.h"
 #include "net_udp.h"
 
-uint16 net_ntohs(uint16 n) {
-	return ((n & 0xff) << 8) | ((n >> 8) & 0xff);
-}
-
-uint32 net_ntohl(uint32 n) {
-	return ((n & 0xFF) << 24) | ((n & 0xFF00) << 8) |
-                ((n >> 8) & 0xFF00) | ((n >> 24) & 0xFF);
-}
-
 /* Perform an IP-style checksum on a block of data */
 uint16 net_ipv4_checksum(const uint16 *data, int words) {
 	uint32 sum;
