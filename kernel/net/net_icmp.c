@@ -102,13 +102,13 @@ static void net_icmp_input_8(netif_t *src, ip_hdr_t *ip, icmp_hdr_t *icmp,
 
 	/* Recompute the IP header checksum */
 	ip->checksum = 0;
-	ip->checksum = net_ipv4_checksum((uint16*)ip,
-	                                 2 * (ip->version_ihl & 0x0f));
+	ip->checksum = net_ipv4_checksum((uint8 *)ip,
+	                                 4 * (ip->version_ihl & 0x0f));
 
 	/* Recompute the ICMP header checksum */
 	icmp->checksum = 0;
-	icmp->checksum = net_ipv4_checksum((uint16*)icmp, ntohs(ip->length) / 
-	                                   2 - 2 * (ip->version_ihl & 0x0f));
+	icmp->checksum = net_ipv4_checksum((uint8 *)icmp, ntohs(ip->length) -
+	                                   4 * (ip->version_ihl & 0x0f));
 
 	/* Send it */
 	memcpy(pktbuf, ip, 20);
@@ -129,9 +129,8 @@ int net_icmp_input(netif_t *src, ip_hdr_t *ip, const uint8 *d, int s) {
 	i = icmp->checksum;
 	icmp->checksum = 0;
 	memcpy(pktbuf, icmp, ntohs(ip->length) - 4 * (ip->version_ihl & 0x0f));
-	icmp->checksum = net_ipv4_checksum((uint16*)pktbuf,
-	                                   (ntohs(ip->length) + 1) / 2 -
-	                                   2 * (ip->version_ihl & 0x0f));
+	icmp->checksum = net_ipv4_checksum(pktbuf, (ntohs(ip->length) + 1)  -
+	                                   4 * (ip->version_ihl & 0x0f));
 
 	if (i != icmp->checksum) {
 		dbglog(DBG_KDEBUG, "net_icmp: icmp with invalid checksum\n");
@@ -198,11 +197,10 @@ int net_icmp_send_echo(netif_t *net, const uint8 ipaddr[4], const uint8 *data,
 	ip.dest = htonl(net_ipv4_address(ipaddr));
 
 	/* Compute the ICMP Checksum */
-	icmp->checksum = net_ipv4_checksum((uint16*)databuf,
-	                                   (sizeof(icmp_hdr_t) + size) / 2);
+	icmp->checksum = net_ipv4_checksum(databuf, sizeof(icmp_hdr_t) + size);
 
 	/* Compute the IP Checksum */
-	ip.checksum = net_ipv4_checksum((uint16*)&ip, sizeof(ip_hdr_t) / 2);
+	ip.checksum = net_ipv4_checksum((uint8 *)&ip, sizeof(ip_hdr_t));
 
 	newping = (struct __ping_pkt*) malloc(sizeof(struct __ping_pkt));
 	newping->data = (uint8 *)malloc(size);

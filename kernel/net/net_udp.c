@@ -537,12 +537,12 @@ int net_udp_input(netif_t *src, ip_hdr_t *ip, const uint8 *data, int size) {
         ps->data[size - sizeof(udp_hdr_t)] = 0;
         checksum = ps->checksum;
         ps->checksum = 0;
-        ps->checksum = net_ipv4_checksum((uint16 *) buf, (size + 13) >> 1);
+        ps->checksum = net_ipv4_checksum(buf, size + 13);
     }
     else {
         checksum = ps->checksum;
         ps->checksum = 0;
-        ps->checksum = net_ipv4_checksum((uint16 *) buf, (size + 12) >> 1);
+        ps->checksum = net_ipv4_checksum(buf, size + 12);
     }
 
     if(checksum != ps->checksum) {
@@ -631,12 +631,10 @@ int net_udp_send_raw(netif_t *net, uint32 src_ip, uint16 src_port,
 
     /* Compute the UDP checksum */
     if(size & 0x01) {
-        ps->checksum = net_ipv4_checksum((uint16 *) buf,
-                                         (size + 13) >> 1);
+        ps->checksum = net_ipv4_checksum(buf, size + 13);
     }
     else {
-        ps->checksum = net_ipv4_checksum((uint16 *) buf,
-                                         (size + 12) >> 1);
+        ps->checksum = net_ipv4_checksum(buf, size + 12);
     }
 
     /* Fill in the IPv4 Header */
@@ -652,7 +650,7 @@ int net_udp_send_raw(netif_t *net, uint32 src_ip, uint16 src_port,
     ip.dest = ps->dst_addr;
 
     /* Compute the IPv4 checksum */
-    ip.checksum = net_ipv4_checksum((uint16 *) &ip, sizeof(ip_hdr_t) >> 1);
+    ip.checksum = net_ipv4_checksum((uint8 *) &ip, sizeof(ip_hdr_t));
 
     /* send it away.... */
     if(net_ipv4_send_packet(net, &ip, buf + 12, size)) {

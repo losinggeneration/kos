@@ -19,20 +19,45 @@
 #include "net_udp.h"
 
 /* Perform an IP-style checksum on a block of data */
-uint16 net_ipv4_checksum(const uint16 *data, int words) {
-	uint32 sum;
+uint16 net_ipv4_checksum(const uint8 *data, int bytes) {
+	uint32 sum = 0;
 	int i;
 
-	sum = 0;
-	for (i=0; i<words; i++) {
-		sum += data[i];
-		if (sum & 0xffff0000) {
-			sum &= 0xffff;
-			sum++;
-		}
-	}
+    /* Make sure we don't do any unaligned memory accesses */
+    if(((uint32)data) & 0x01) {
+        for(i = 0; i < bytes; i += 2) {
+            sum += (data[i]) | (data[i + 1] << 8);
 
-	return ~(sum & 0xffff);
+            if(sum & 0xFFFF0000) {
+                sum &= 0xFFFF;
+                ++sum;
+            }
+        }
+    }
+    else {
+        uint16 *ptr = (uint16 *)data;
+
+        for(i = 0; i < (bytes >> 1); ++i) {
+            sum += ptr[i];
+
+            if(sum & 0xFFFF0000) {
+                sum &= 0xFFFF;
+                ++sum;
+            }
+        }
+    }
+
+    /* Handle the last byte, if we have an odd byte count */
+    if(bytes & 0x01) {
+        sum += data[bytes - 1];
+
+        if(sum & 0xFFFF0000) {
+            sum &= 0xFFFF;
+            ++sum;
+        }
+    }
+
+	return sum ^ 0xFFFF;
 }
 
 /* Determine if a given IP is in the current network */
@@ -130,7 +155,7 @@ int net_ipv4_input(netif_t *src, const uint8 *pkt, int pktsize) {
 	/* Check ip header checksum */
 	i = ip->checksum;
 	ip->checksum = 0;
-	ip->checksum = net_ipv4_checksum((uint16*)ip, 2 *
+	ip->checksum = net_ipv4_checksum((uint8 *)ip, 4 *
 	                                 (ip->version_ihl & 0x0f));
 
 	if(i != ip->checksum) {
