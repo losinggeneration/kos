@@ -4,6 +4,7 @@
 
    Copyright (C)2001,2003,2005 Dan Potter
    Copyright (C)2004 Vincent Penne
+   Copyright (C)2007 Lawrence Sebald
 
  */
 
@@ -517,7 +518,7 @@ static int bba_copy_dma(uint8 * dst, uint32 s, int len) {
 	if (len <= 0)
 		return 1;
 
-	if (len > DMA_THRESHOLD) {
+	if (len > DMA_THRESHOLD && !irq_inside_int()) {
 		uint32 add;
 
 		/*
@@ -952,9 +953,26 @@ static int bba_if_tx_commit(netif_t *self) {
 	return 0;
 }
 
-/* All RX is done via the interrupt */
 static int bba_if_rx_poll(netif_t *self) {
-	return -1;
+	int intr;
+
+	intr = g2_read_16(NIC(RT_INTRSTATUS));
+
+	if (intr & RT_INT_RX_ACK) {
+		bba_rx();
+
+		/* so that the irq is not called */
+		g2_write_16(NIC(RT_INTRSTATUS), RT_INT_RX_ACK);
+	}
+
+	if (rxout != rxin) {
+		/* Call the callback to process it */
+		eth_rx_callback(rx_pkt[rxout].rxbuff, rx_pkt[rxout].pkt_size);
+
+		rxout = (rxout + 1) % MAX_PKTS;
+	}
+
+	return 0;
 }
 
 /* Don't need to hook anything here yet */
