@@ -582,6 +582,12 @@ static int la_if_start(netif_t * self) {
 	if (!(self->flags & NETIF_INITIALIZED))
 		return -1;
 
+	/* The Lan adapter seems a bit picky if you try to send packets too soonly
+	   after initialization (or at least mine is). 3 seconds seems to be enough
+	   of a delay, but 2 seconds certainly is not. Give it 4 seconds, just in
+	   case its in a bad mood this run. */
+	timer_spin_sleep(4000);
+
 	self->flags |= NETIF_RUNNING;
 
 	if (la_started == LA_PAUSED)
