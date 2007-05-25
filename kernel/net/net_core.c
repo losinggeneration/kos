@@ -148,6 +148,7 @@ int net_init() {
 	/* Initialize the UDP system */
 	net_udp_init();
 
+	/* Initialize the sockets-like interface */
 	fs_socket_init();
 
 	return 0;
@@ -155,9 +156,18 @@ int net_init() {
 
 /* Shutdown */
 void net_shutdown() {
-	/* Shut down all activated network devices */
 	netif_t *cur;
 
+	/* Shut down the sockets-like interface */
+	fs_socket_shutdown();
+
+	/* Shut down the UDP system */
+	net_udp_shutdown();
+
+	/* Shut down the ARP cache */
+	net_arp_shutdown();
+
+	/* Shut down all activated network devices */
 	LIST_FOREACH(cur, &net_if_list, if_list) {
 		if (cur->flags & NETIF_RUNNING && cur->if_stop)
 			cur->if_stop(cur);
@@ -168,12 +178,4 @@ void net_shutdown() {
 
 	/* Blank out the list */
 	LIST_INIT(&net_if_list);
-
-	/* Shut down the ARP cache */
-	net_arp_shutdown();
-
-	/* Shut down the UDP system */
-	net_udp_shutdown();
-
-	fs_socket_shutdown();
 }
