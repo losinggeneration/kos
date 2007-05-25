@@ -95,6 +95,9 @@ int net_arp_insert(netif_t *nif, uint8 mac[6], uint8 ip[4], uint32 timestamp) {
 int net_arp_lookup(netif_t *nif, uint8 ip_in[4], uint8 mac_out[6]) {
 	netarp_t *cur;
 
+	/* Garbage collect expired entries */
+	net_arp_gc();
+
 	/* Look for the entry */
 	LIST_FOREACH(cur, &net_arp_cache, ac_list) {
 		if (!memcmp(ip_in, cur->ip, 4)) {
@@ -140,7 +143,7 @@ int net_arp_revlookup(netif_t *nif, uint8 ip_out[4], uint8 mac_in[6]) {
 	return -1;
 }
 
-/* Send an ARP reply packet on the specified network adaptor */
+/* Send an ARP reply packet on the specified network adapter */
 static int net_arp_send(netif_t *nif, arp_pkt_t *pkt)	{
 	arp_pkt_t pkt_out;
 	eth_hdr_t eth_hdr;
@@ -261,7 +264,7 @@ void net_arp_shutdown() {
 	a1 = LIST_FIRST(&net_arp_cache);
 	while (a1 != NULL) {
 		a2 = LIST_NEXT(a1, ac_list);
-		free(a2);
+		free(a1);
 		a1 = a2;
 	}
 
