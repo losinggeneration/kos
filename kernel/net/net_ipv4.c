@@ -2,7 +2,7 @@
 
    kernel/net/net_ipv4.c
 
-   Copyright (C) 2005, 2006 Lawrence Sebald
+   Copyright (C) 2005, 2006, 2007 Lawrence Sebald
 
    Portions adapted from KOS' old net_icmp.c file:
    Copyright (c) 2002 Dan Potter
@@ -119,24 +119,13 @@ int net_ipv4_send_packet(netif_t *net, ip_hdr_t *hdr, const uint8 *data,
 }
 
 int net_ipv4_input(netif_t *src, const uint8 *pkt, int pktsize) {
-	eth_hdr_t	*eth;
 	ip_hdr_t	*ip;
 	int		i;
 	uint8 *data;
-	uint16 *ethproto;
 
 	/* Get pointers */
-	eth = (eth_hdr_t*) (pkt);
-	ip = (ip_hdr_t*) (pkt + sizeof(eth_hdr_t));
-	data = (uint8 *) (pkt + sizeof(eth_hdr_t) + 4 *
-	                  (ip->version_ihl & 0x0f));
-	ethproto = (uint16 *) (pkt + 12);
-
-	/* Make sure this packet is actually marked as an IP packet */
-	if(ntohs(*ethproto) != 0x0800) {
-		dbglog(DBG_KDEBUG, "net_ipv4: Discarding non IP packet\n");
-		return 0;
-	}
+	ip = (ip_hdr_t*) pkt;
+	data = (uint8 *) (pkt + 4 * (ip->version_ihl & 0x0f));
 
 	/* Check ip header checksum */
 	i = ip->checksum;
@@ -152,11 +141,11 @@ int net_ipv4_input(netif_t *src, const uint8 *pkt, int pktsize) {
 
 	switch(ip->protocol) {
 		case 1:
-			net_icmp_input(src, eth, ip, data, ntohs(ip->length) -
+			net_icmp_input(src, ip, data, ntohs(ip->length) -
 			               (ip->version_ihl & 0x0f) * 4);
 			break;
 		case 17:
-			net_udp_input(src, eth, ip, data, ntohs(ip->length) -
+			net_udp_input(src, ip, data, ntohs(ip->length) -
 			              (ip->version_ihl & 0x0f) * 4);
 			break;
 		default:

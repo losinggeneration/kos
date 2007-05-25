@@ -23,7 +23,8 @@ static int net_default_input(netif_t *nif, const uint8 *data, int len) {
 
 	switch(ntohs(*proto)) {
 		case 0x0800:
-			return net_ipv4_input(nif, data, len);
+			return net_ipv4_input(nif, data + sizeof(eth_hdr_t),
+                                  len - sizeof(eth_hdr_t));
 		case 0x0806:
 			return net_arp_input(nif, data, len);
 		default:

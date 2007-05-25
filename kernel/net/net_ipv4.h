@@ -1,7 +1,7 @@
 /* KallistiOS ##version##
 
    kernel/net/net_ipv4.h
-   Copyright (C) 2005 Lawrence Sebald
+   Copyright (C) 2005, 2007 Lawrence Sebald
 
 */
 

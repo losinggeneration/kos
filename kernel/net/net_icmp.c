@@ -3,7 +3,7 @@
    kernel/net/net_icmp.c
 
    Copyright (C) 2002 Dan Potter
-   Copyright (C) 2005, 2006 Lawrence Sebald
+   Copyright (C) 2005, 2006, 2007 Lawrence Sebald
 
  */
 
@@ -64,8 +64,8 @@ static void icmp_default_echo_cb(const uint8 *ip, uint16 seq, uint64 delta_us,
 net_echo_cb net_icmp_echo_cb = icmp_default_echo_cb;
 
 /* Handle Echo Reply (ICMP type 0) packets */
-static void net_icmp_input_0(netif_t *src, eth_hdr_t *eth, ip_hdr_t *ip,
-                             icmp_hdr_t *icmp, const uint8 *d, int s) {
+static void net_icmp_input_0(netif_t *src, ip_hdr_t *ip, icmp_hdr_t *icmp,
+                             const uint8 *d, int s) {
 	uint64 tmr;
 	struct __ping_pkt *ping;
 	uint16 seq;
@@ -88,18 +88,12 @@ static void net_icmp_input_0(netif_t *src, eth_hdr_t *eth, ip_hdr_t *ip,
 }
 
 /* Handle Echo (ICMP type 8) packets */
-static void net_icmp_input_8(netif_t *src, eth_hdr_t *eth, ip_hdr_t *ip,
-                             icmp_hdr_t *icmp, const uint8 *d, int s) {
-	uint8 tmp[6];
+static void net_icmp_input_8(netif_t *src, ip_hdr_t *ip, icmp_hdr_t *icmp,
+                             const uint8 *d, int s) {
 	int i;
 
 	/* Set type to echo reply */
 	icmp->type = 0;
-
-	/* Swap source and dest addresses */
-	memcpy(tmp, eth->dest, 6);
-	memcpy(eth->dest, eth->src, 6);
-	memcpy(eth->src, tmp, 6);
 
 	/* Swap source and dest ip addresses */
 	i = ip->src;
@@ -117,15 +111,13 @@ static void net_icmp_input_8(netif_t *src, eth_hdr_t *eth, ip_hdr_t *ip,
 	                                   2 - 2 * (ip->version_ihl & 0x0f));
 
 	/* Send it */
-	memcpy(pktbuf, eth, 14);
-	memcpy(pktbuf + 14, ip, 20);
-	memcpy(pktbuf + 14 + 20, d, ntohs(ip->length) - 4 * 
-	       (ip->version_ihl & 0x0F));
-	src->if_tx(src, pktbuf, 14 + ntohs(ip->length), NETIF_BLOCK);
+	memcpy(pktbuf, ip, 20);
+	memcpy(pktbuf + 20, d, ntohs(ip->length) - 4 * (ip->version_ihl & 0x0F));
+	net_ipv4_send_packet(src, ip, pktbuf + 20, ntohs(ip->length) -
+	                     4 * (ip->version_ihl & 0x0F));
 }
 
-int net_icmp_input(netif_t *src, eth_hdr_t *eth, ip_hdr_t *ip, const uint8 *d,
-                   int s) {
+int net_icmp_input(netif_t *src, ip_hdr_t *ip, const uint8 *d, int s) {
 	icmp_hdr_t *icmp;
 	int i;
 
@@ -148,7 +140,7 @@ int net_icmp_input(netif_t *src, eth_hdr_t *eth, ip_hdr_t *ip, const uint8 *d,
 
 	switch(icmp->type) {
 		case 0: /* Echo reply */
-			net_icmp_input_0(src, eth, ip, icmp, d, s);
+			net_icmp_input_0(src, ip, icmp, d, s);
 			break;
 		case 3: /* Destination unreachable */
 			dbglog(DBG_KDEBUG, "net_icmp: Destination unreachable,"
@@ -156,7 +148,7 @@ int net_icmp_input(netif_t *src, eth_hdr_t *eth, ip_hdr_t *ip, const uint8 *d,
 			break;
 
 		case 8: /* Echo */
-			net_icmp_input_8(src, eth, ip, icmp, d, s);
+			net_icmp_input_8(src, ip, icmp, d, s);
 			break;
 
 		default:
@@ -184,7 +176,7 @@ int net_icmp_send_echo(netif_t *net, const uint8 ipaddr[4], const uint8 *data,
 	icmp->checksum = 0;
 	icmp->misc[0] = (uint8) 'D';
 	icmp->misc[1] = (uint8) 'C';
-	icmp->misc[2] = (uint8) (icmp_echo_seq >> 16);
+	icmp->misc[2] = (uint8) (icmp_echo_seq >> 8);
 	icmp->misc[3] = (uint8) (icmp_echo_seq & 0xFF);
 	memcpy(databuf + sizeof(icmp_hdr_t), data, size);
 
@@ -197,7 +189,12 @@ int net_icmp_send_echo(netif_t *net, const uint8 ipaddr[4], const uint8 *data,
 	ip.ttl = 64;
 	ip.protocol = 1; /* ICMP */
 	ip.checksum = 0;
-	ip.src = htonl(net_ipv4_address(net->ip_addr));
+
+	if(net_ipv4_address(ipaddr) == 0x7F000001)
+		ip.src = htonl(net_ipv4_address(ipaddr));
+	else
+		ip.src = htonl(net_ipv4_address(net->ip_addr));
+
 	ip.dest = htonl(net_ipv4_address(ipaddr));
 
 	/* Compute the ICMP Checksum */

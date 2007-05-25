@@ -2,9 +2,7 @@
 
    kernel/net/net_icmp.h
    Copyright (C) 2002 Dan Potter
-   Copyright (C) 2005 Lawrence Sebald
-
-   $Id: net_icmp.h,v 1.2 2002/03/24 00:27:05 bardtx Exp $
+   Copyright (C) 2005, 2007 Lawrence Sebald
 
 */
 
@@ -26,8 +24,7 @@ typedef struct {
 } icmp_hdr_t;
 #undef packed
 
-int net_icmp_input(netif_t *src, eth_hdr_t *eh, ip_hdr_t *ih, const uint8 *data, 
-                   int size);
+int net_icmp_input(netif_t *src, ip_hdr_t *ih, const uint8 *data, int size);
 
 __END_DECLS
 

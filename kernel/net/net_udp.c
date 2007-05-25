@@ -1,7 +1,7 @@
 /* KallistiOS ##version##
 
    kernel/net/net_udp.c
-   Copyright (C) 2005, 2006 Lawrence Sebald
+   Copyright (C) 2005, 2006, 2007 Lawrence Sebald
 
 */
 
@@ -518,8 +518,7 @@ int net_udp_setflags(net_socket_t *hnd, int flags) {
     return 0;
 }
 
-int net_udp_input(netif_t *src, eth_hdr_t *eh, ip_hdr_t *ip, const uint8 *data,
-                  int size) {
+int net_udp_input(netif_t *src, ip_hdr_t *ip, const uint8 *data, int size) {
     uint8 buf[size + 13];
     ip_pseudo_hdr_t *ps = (ip_pseudo_hdr_t *)buf;
     uint16 checksum;
