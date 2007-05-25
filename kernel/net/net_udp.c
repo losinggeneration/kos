@@ -15,6 +15,7 @@
 #include <sys/queue.h>
 #include <kos/dbgio.h>
 #include <kos/fs_socket.h>
+#include <arch/irq.h>
 #include <sys/socket.h>
 #include <errno.h>
 #include "net_ipv4.h"
@@ -70,7 +71,15 @@ int net_udp_bind(net_socket_t *hnd, const struct sockaddr *addr,
     /* Get the sockaddr_in structure, rather than the sockaddr one */
     realaddr = (struct sockaddr_in *) addr;
 
-    mutex_lock(udp_mutex);
+    if(irq_inside_int()) {
+        if(mutex_trylock(udp_mutex) == -1) {
+            errno = EWOULDBLOCK;
+            return -1;
+        }
+    }
+    else {
+        mutex_lock(udp_mutex);
+    }
 
     udpsock = (struct udp_sock *)hnd->data;
     if(udpsock == NULL) {
@@ -133,7 +142,15 @@ int net_udp_connect(net_socket_t *hnd, const struct sockaddr *addr,
         return -1;
     }
 
-    mutex_lock(udp_mutex);
+    if(irq_inside_int()) {
+        if(mutex_trylock(udp_mutex) == -1) {
+            errno = EWOULDBLOCK;
+            return -1;
+        }
+    }
+    else {
+        mutex_lock(udp_mutex);
+    }
 
     udpsock = (struct udp_sock *)hnd->data;
     if(udpsock == NULL) {
@@ -172,7 +189,15 @@ ssize_t net_udp_recv(net_socket_t *hnd, void *buffer, size_t length, int flags) 
     struct udp_sock *udpsock;
     struct udp_pkt *pkt;
 
-    mutex_lock(udp_mutex);
+    if(irq_inside_int()) {
+        if(mutex_trylock(udp_mutex) == -1) {
+            errno = EWOULDBLOCK;
+            return -1;
+        }
+    }
+    else {
+        mutex_lock(udp_mutex);
+    }
 
     udpsock = (struct udp_sock *)hnd->data;
     if(udpsock == NULL) {
@@ -199,7 +224,8 @@ ssize_t net_udp_recv(net_socket_t *hnd, void *buffer, size_t length, int flags) 
         return -1;
     }
 
-    if(TAILQ_EMPTY(&udpsock->packets) && (udpsock->flags & O_NONBLOCK)) {
+    if(TAILQ_EMPTY(&udpsock->packets) && ((udpsock->flags & O_NONBLOCK) ||
+                                           irq_inside_int())) {
         mutex_unlock(udp_mutex);
         errno = EWOULDBLOCK;
         return -1;
@@ -234,7 +260,15 @@ ssize_t net_udp_recvfrom(net_socket_t *hnd, void *buffer, size_t length,
     struct udp_sock *udpsock;
     struct udp_pkt *pkt;
 
-    mutex_lock(udp_mutex);
+    if(irq_inside_int()) {
+        if(mutex_trylock(udp_mutex) == -1) {
+            errno = EWOULDBLOCK;
+            return -1;
+        }
+    }
+    else {
+        mutex_lock(udp_mutex);
+    }
 
     udpsock = (struct udp_sock *)hnd->data;
     if(udpsock == NULL) {
@@ -254,7 +288,8 @@ ssize_t net_udp_recvfrom(net_socket_t *hnd, void *buffer, size_t length,
         return -1;
     }
 
-    if(TAILQ_EMPTY(&udpsock->packets) && (udpsock->flags & O_NONBLOCK)) {
+    if(TAILQ_EMPTY(&udpsock->packets) && ((udpsock->flags & O_NONBLOCK) ||
+                                           irq_inside_int())) {
         mutex_unlock(udp_mutex);
         errno = EWOULDBLOCK;
         return -1;
@@ -304,7 +339,15 @@ ssize_t net_udp_send(net_socket_t *hnd, const void *message, size_t length,
                      int flags) {
     struct udp_sock *udpsock;
 
-    mutex_lock(udp_mutex);
+    if(irq_inside_int()) {
+        if(mutex_trylock(udp_mutex) == -1) {
+            errno = EWOULDBLOCK;
+            return -1;
+        }
+    }
+    else {
+        mutex_lock(udp_mutex);
+    }
 
     udpsock = (struct udp_sock *)hnd->data;
     if(udpsock == NULL) {
@@ -366,7 +409,15 @@ ssize_t net_udp_sendto(net_socket_t *hnd, const void *message, size_t length,
     struct udp_sock *udpsock;
     struct sockaddr_in *realaddr;
 
-    mutex_lock(udp_mutex);
+    if(irq_inside_int()) {
+        if(mutex_trylock(udp_mutex) == -1) {
+            errno = EWOULDBLOCK;
+            return -1;
+        }
+    }
+    else {
+        mutex_lock(udp_mutex);
+    }
 
     udpsock = (struct udp_sock *)hnd->data;
     if(udpsock == NULL) {
@@ -419,7 +470,15 @@ ssize_t net_udp_sendto(net_socket_t *hnd, const void *message, size_t length,
 int net_udp_shutdownsock(net_socket_t *hnd, int how) {
     struct udp_sock *udpsock;
 
-    mutex_lock(udp_mutex);
+    if(irq_inside_int()) {
+        if(mutex_trylock(udp_mutex) == -1) {
+            errno = EWOULDBLOCK;
+            return -1;
+        }
+    }
+    else {
+        mutex_lock(udp_mutex);
+    }
 
     udpsock = (struct udp_sock *)hnd->data;
     if(udpsock == NULL) {
@@ -461,7 +520,16 @@ int net_udp_socket(net_socket_t *hnd, int domain, int type, int protocol) {
 
     TAILQ_INIT(&udpsock->packets);
 
-    mutex_lock(udp_mutex);
+    if(irq_inside_int()) {
+        if(mutex_trylock(udp_mutex) == -1) {
+            errno = EWOULDBLOCK;
+            return -1;
+        }
+    }
+    else {
+        mutex_lock(udp_mutex);
+    }
+
     LIST_INSERT_HEAD(&net_udp_sockets, udpsock, sock_list);
     mutex_unlock(udp_mutex);
 
@@ -474,12 +542,21 @@ void net_udp_close(net_socket_t *hnd) {
     struct udp_sock *udpsock;
     struct udp_pkt *pkt;
 
-    mutex_lock(udp_mutex);
+    if(irq_inside_int()) {
+        if(mutex_trylock(udp_mutex) == -1) {
+            errno = EWOULDBLOCK;
+            return;
+        }
+    }
+    else {
+        mutex_lock(udp_mutex);
+    }
 
     udpsock = (struct udp_sock *)hnd->data;
     if(udpsock == NULL) {
         mutex_unlock(udp_mutex);
         errno = EBADF;
+        return;
     }
 
     TAILQ_FOREACH(pkt, &udpsock->packets, pkt_queue) {
@@ -497,7 +574,15 @@ void net_udp_close(net_socket_t *hnd) {
 int net_udp_setflags(net_socket_t *hnd, int flags) {
     struct udp_sock *udpsock;
 
-    mutex_lock(udp_mutex);
+    if(irq_inside_int()) {
+        if(mutex_trylock(udp_mutex) == -1) {
+            errno = EWOULDBLOCK;
+            return -1;
+        }
+    }
+    else {
+        mutex_lock(udp_mutex);
+    }
 
     udpsock = (struct udp_sock *) hnd->data;
     if(udpsock == NULL) {
