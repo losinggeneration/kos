@@ -20,10 +20,10 @@
 # User configuration
 sh_target=sh-elf
 arm_target=arm-elf
-sh_prefix  := /opt/dc/$(sh_target)
-arm_prefix := /opt/dc/$(arm_target)
+sh_prefix  := /usr/local/dc/$(sh_target)
+arm_prefix := /usr/local/dc/$(arm_target)
 # kos_root: KOS subversion root (contains kos/ and kos-ports/)
-kos_root=~/prj/svn
+kos_root=$(curdir)/../../..
 # kos_base: equivalent of KOS_BASE (contains include/ and kernel/)
 kos_base=$(kos_root)/kos
 binutils_ver=2.15
@@ -108,6 +108,7 @@ $(build_binutils): logdir
 	> $(log)
 	cd $(build); ../$(src_dir)/configure --target=$(target) --prefix=$(prefix) $(to_log)
 	make -C $(build) all install $(to_log)
+	make -C $(build)/bfd install_libbfd $(to_log)
 	$(clean_up)
 
 $(build_gcc_pass1) $(build_gcc_pass2): build = build-gcc-$(target)-$(gcc_ver)
