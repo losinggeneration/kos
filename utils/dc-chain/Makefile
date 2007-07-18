@@ -23,10 +23,10 @@ arm_target=arm-elf
 sh_prefix  := /usr/local/dc/$(sh_target)
 arm_prefix := /usr/local/dc/$(arm_target)
 # kos_root: KOS subversion root (contains kos/ and kos-ports/)
-kos_root=$(curdir)/../../..
+kos_root=$(CURDIR)/../../..
 # kos_base: equivalent of KOS_BASE (contains include/ and kernel/)
 kos_base=$(kos_root)/kos
-binutils_ver=2.15
+binutils_ver=2.17
 gcc_ver=3.4.6
 newlib_ver=1.12.0
 thread_model=posix
@@ -46,19 +46,24 @@ newlib_dir=newlib-$(newlib_ver)
 all: patch build
 
 # ---- patch {{{
+binutils_patches    := $(wildcard $(patches)/binutils-$(binutils_ver)*.diff)
 gcc_patches    := $(wildcard $(patches)/gcc-$(gcc_ver)*.diff)
 newlib_patches := $(wildcard $(patches)/newlib-$(newlib_ver)*.diff)
 kos_patches    := $(wildcard $(patches)/kos-*.diff)
 
-patch_targets=patch-gcc patch-newlib patch-kos
+patch_targets=patch-binutils patch-gcc patch-newlib patch-kos
 
 patch: $(patch_targets)
+patch-binutils: $(binutils_patches)
 patch-gcc: $(gcc_patches)
 patch-newlib: $(newlib_patches) 
 patch-kos: $(kos_patches)
 
 $(newlib_patches):
 	cd $(newlib_dir); patch -p1 < $@
+
+$(binutils_patches):
+	cd $(binutils_dir); patch -p1 < $@
 
 $(gcc_patches):
 	cd $(gcc_dir); patch -p1 < $@
@@ -137,12 +142,18 @@ $(build_newlib): logdir
 fixup-sh4-newlib: newlib_inc=$(sh_prefix)/$(sh_target)/include
 fixup-sh4-newlib:
 	@echo "+++ Fixing up sh4 newlib includes..."
-	cp $(kos_base)/include/pthread.h $(newlib_inc)                       # KOS pthread.h is modified
-	cp $(kos_base)/include/sys/_pthread.h $(newlib_inc)/sys              # to define _POSIX_THREADS
-	cp $(kos_base)/include/sys/sched.h $(newlib_inc)/sys                 # pthreads to kthreads mapping
-	ln -nsf $(kos_base)/include/kos $(newlib_inc)                        # so KOS includes are available as kos/file.h
-	ln -nsf $(kos_base)/kernel/arch/dreamcast/include/arch $(newlib_inc) # kos/thread.h requires arch/arch.h
-	ln -nsf $(kos_base)/kernel/arch/dreamcast/include/dc   $(newlib_inc) # arch/arch.h requires dc/video.h
+# KOS pthread.h is modified
+# to define _POSIX_THREADS
+# pthreads to kthreads mapping
+# so KOS includes are available as kos/file.h
+# kos/thread.h requires arch/arch.h
+# arch/arch.h requires dc/video.h
+	cp $(kos_base)/include/pthread.h $(newlib_inc)
+	cp $(kos_base)/include/sys/_pthread.h $(newlib_inc)/sys
+	cp $(kos_base)/include/sys/sched.h $(newlib_inc)/sys
+	ln -nsf $(kos_base)/include/kos $(newlib_inc)
+	ln -nsf $(kos_base)/kernel/arch/dreamcast/include/arch $(newlib_inc)
+	ln -nsf $(kos_base)/kernel/arch/dreamcast/include/dc   $(newlib_inc)
 
 $(build_gcc_pass2): log = $(logdir)/$(build)-pass2.log
 $(build_gcc_pass2): logdir
@@ -194,7 +205,7 @@ endif
 # ---- phony targets {{{
 
 .PHONY: $(patch_targets)
-.PHONY: $(newlib_patches) $(gcc_patches) $(kos_patches)
+.PHONY: $(newlib_patches) $(binutils_patches) $(gcc_patches) $(kos_patches)
 .PHONY: all build patch build-sh4 build-arm $(build_sh4_targets) $(build_arm_targets) clean
 .PHONY: build-binutils build-newlib build-gcc-pass1 build-gcc-pass2 fixup-sh4-newlib
 
