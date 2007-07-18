@@ -36,10 +36,10 @@ export KOS_GENROMFS="${KOS_BASE}/utils/genromfs/genromfs"
 #export KOS_GENROMFS="genromfs"
 
 # Compiler prefixes
-export KOS_CC_BASE="/usr/local/dc/dc-elf"
-export KOS_CC_PREFIX="dc"
-#export KOS_CC_BASE="/usr/local/dc/sh-elf"		# DC
-#export KOS_CC_PREFIX="sh-elf"
+#export KOS_CC_BASE="/usr/local/dc/dc-elf"
+#export KOS_CC_PREFIX="dc"
+export KOS_CC_BASE="/usr/local/dc/sh-elf"		# DC
+export KOS_CC_PREFIX="sh-elf"
 #export KOS_CC_BASE="${EE}"				# PS2
 #export KOS_CC_PREFIX="ee"
 #export KOS_CC_BASE="/usr/local/gba/arm-elf"		# GBA
