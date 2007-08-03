@@ -28,7 +28,7 @@ void move_polys() {
 	int i;
 	polyplace_t *p;
 	
-	for (i=0; i<12; i++) {
+	for (i=0; i<6; i++) {
 		p = polys+i;
 		
 		p->x += p->dx;
