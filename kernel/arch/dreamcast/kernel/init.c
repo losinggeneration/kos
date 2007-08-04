@@ -253,14 +253,15 @@ void arch_return() {
 
 /* Called to jump back to the BIOS menu; assumes a normal shutdown is possible */
 void arch_menu() {
-	void (*menu)(int) __noreturn;
+	typedef void (*menufunc)(int) __noreturn;
+	menufunc menu;
 
 	/* Shut down */
 	arch_shutdown();
 
 	/* Jump to the menus */
 	dbglog(DBG_CRITICAL, "arch: exiting the system to the BIOS menu\n");
-	*((uint32 *) &menu) = *((uint32 *) 0x8c0000e0);
+	menu = (menufunc)(*((uint32 *) 0x8c0000e0));
     menu(1);
 }
 
@@ -291,7 +292,8 @@ void arch_abort() {
 /* Called to reboot the system; assume the system is in peril and don't
    try to call the dtors */
 void arch_reboot() {
-	void (*rb)() __noreturn;
+	typedef void (*reboot_func)() __noreturn;
+	reboot_func rb;
 
 	dbglog(DBG_CRITICAL, "arch: rebooting the system\n");
 
@@ -299,6 +301,6 @@ void arch_reboot() {
 	irq_disable();
 
 	/* Reboot */
-	*((uint32 *) &rb) = 0xa0000000;
+	rb = (reboot_func)0xa0000000;
 	rb();
 }

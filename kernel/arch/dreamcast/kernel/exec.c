@@ -84,8 +84,9 @@ void arch_exec_at(const void *image, uint32 length, uint32 address) {
 
 	/* Jump to the trampoline */
 	{
-		void (*trampoline)() __noreturn;
-		*((uint32 *) &trampoline) = (uint32)buffer;
+		typedef void (*trampoline_func)() __noreturn;
+		trampoline_func trampoline = (trampoline_func)buffer;
+
 		trampoline();
 	}
 }
