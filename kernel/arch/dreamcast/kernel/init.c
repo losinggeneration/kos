@@ -23,6 +23,8 @@ CVSID("$Id: main.c,v 1.28 2003/04/24 03:04:24 bardtx Exp $");
 
 extern int _bss_start, end;
 
+void _atexit_call_all();
+
 /* Ditto */
 int	main(int argc, char **argv);
 
@@ -251,13 +253,15 @@ void arch_return() {
 
 /* Called to jump back to the BIOS menu; assumes a normal shutdown is possible */
 void arch_menu() {
+	void (*menu)(int) __noreturn;
+
 	/* Shut down */
 	arch_shutdown();
 
 	/* Jump to the menus */
 	dbglog(DBG_CRITICAL, "arch: exiting the system to the BIOS menu\n");
-
-	{ void (*menu)(int) __noreturn; ((uint32 *)menu) = *((uint32 *)0x8c0000e0); menu(1); }
+	*((uint32 *) &menu) = *((uint32 *) 0x8c0000e0);
+    menu(1);
 }
 
 /* Called to shut down non-gracefully; assume the system is in peril
@@ -287,11 +291,14 @@ void arch_abort() {
 /* Called to reboot the system; assume the system is in peril and don't
    try to call the dtors */
 void arch_reboot() {
+	void (*rb)() __noreturn;
+
 	dbglog(DBG_CRITICAL, "arch: rebooting the system\n");
 
 	/* Ensure that interrupts are disabled */
 	irq_disable();
 
 	/* Reboot */
-	{ void (*rb)() __noreturn; ((uint32*)rb) = (uint32 *)0xa0000000; rb(); }
+	*((uint32 *) &rb) = 0xa0000000;
+	rb();
 }
