@@ -26,8 +26,8 @@ include $(KOS_BASE)/Makefile.prefab
 
 banner.o: banner.c
 
-banner.c: make_banner.sh
-	./make_banner.sh
+banner.c:
+	echo 'char banner[] = "KallistiOS ##version##: $(shell date)\n  $(shell whoami)@$(shell hostname):$(KOS_BASE)\n";'>$@
 
 arch_exports.o: arch_exports.c
 
@@ -39,3 +39,5 @@ clean:
 	-rm -f $(OBJS)
 	-rm -f arch_exports.c
 	-rm -f arch_exports.c
+
+.PHONY: banner.c
