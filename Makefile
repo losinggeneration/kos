@@ -29,3 +29,9 @@ clean:
 distclean: clean
 	-rm -f $(KOS_BASE)/lib/$(KOS_ARCH)/*
 	-rm -f $(KOS_BASE)/addons/lib/$(KOS_ARCH)/*
+
+kos-ports_all:
+	$(KOS_MAKE) -C $(KOS_BASE)/../kos-ports all
+
+kos-ports_clean:
+	$(KOS_MAKE) -C $(KOS_BASE)/../kos-ports clean
