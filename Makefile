@@ -27,11 +27,17 @@ clean:
 	for i in $(DIRS); do $(KOS_MAKE) -C $$i clean || exit -1; done
 
 distclean: clean
-	-rm -f $(KOS_BASE)/lib/$(KOS_ARCH)/*
-	-rm -f $(KOS_BASE)/addons/lib/$(KOS_ARCH)/*
+	-rm -f lib/$(KOS_ARCH)/*
+	-rm -f addons/lib/$(KOS_ARCH)/*
 
 kos-ports_all:
-	$(KOS_MAKE) -C $(KOS_BASE)/../kos-ports all
+	$(KOS_MAKE) -C ../kos-ports all KOS_BASE=$(CURDIR)
 
 kos-ports_clean:
-	$(KOS_MAKE) -C $(KOS_BASE)/../kos-ports clean
+	$(KOS_MAKE) -C ../kos-ports clean KOS_BASE=$(CURDIR)
+
+all_auto_kos_base:
+	$(KOS_MAKE) all KOS_BASE=$(CURDIR)
+
+clean_auto_kos_base:
+	$(KOS_MAKE) clean KOS_BASE=$(CURDIR)
