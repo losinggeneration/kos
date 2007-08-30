@@ -61,9 +61,20 @@ static int gdc_get_drv_stat(void *param) { MAKE_SYSCALL(return, param, 0, 4); }
 /* Set disc access mode */
 static int gdc_change_data_type(void *param) { MAKE_SYSCALL(return, param, 0, 10); }
 
+/* Reset the GD-ROM */
+static void gdc_reset() {   MAKE_SYSCALL(/**/, 0, 0, 9); }
+
+/* Abort the current command */
+static void gdc_abort_cmd(int cmd) { MAKE_SYSCALL(/**/,cmd, 0, 8); }
 
 /* The CD access mutex */
 static mutex_t * mutex = NULL;
+static int sector_size = 2048;   /*default 2048, 2352 for raw data reading*/
+
+void set_sector_size (int size) {
+	sector_size = size;
+	cdrom_reinit();
+} 
 
 /* Command execution sequence */
 int cdrom_exec_cmd(int cmd, void *param) {
@@ -75,12 +86,16 @@ int cdrom_exec_cmd(int cmd, void *param) {
 	do {
 		gdc_exec_server();
 		n = gdc_get_cmd_stat(f, status);
-		if (n == 1)
+		if (n == PROCESSING)
 			thd_pass();
-	} while (n == 1);
+	} while (n == PROCESSING);
 
-	if (n == 2)
+	if (n == COMPLETED)
 		return ERR_OK;
+	else if (n == ABORTED)
+		return ERR_ABORTED;
+	else if (n == NO_ACTIVE)
+		return ERR_NO_ACTIVE;
 	else {
 		switch(status[0]) {
 			case 2: return ERR_NO_DISC;
@@ -163,7 +178,7 @@ int cdrom_reinit() {
 	params[0] = 0;				/* 0 = set, 1 = get */
 	params[1] = 8192;			/* ? */
 	params[2] = cdxa ? 2048 : 1024;		/* CD-XA mode 1/2 */
-	params[3] = 2048;			/* sector size */
+	params[3] = sector_size;		/* sector size */
 	if (gdc_change_data_type(params) < 0) { rv = ERR_SYS; goto exit; }
 
 exit:

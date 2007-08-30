@@ -36,6 +36,15 @@ __BEGIN_DECLS
 #define ERR_NO_DISC	1
 #define ERR_DISC_CHG	2
 #define ERR_SYS		3
+#define ERR_ABORTED	4
+#define ERR_NO_ACTIVE	5
+
+/* Command Status responses */
+#define FAILED		-1
+#define NO_ACTIVE	0
+#define PROCESSING	1
+#define COMPLETED	2
+#define ABORTED		3
 
 /* CDDA Read Modes */
 #define CDDA_TRACKS	1
@@ -70,6 +79,9 @@ typedef struct {
 #define TOC_ADR(n) ( ((n) & 0x0f000000) >> 24 )
 #define TOC_CTRL(n) ( ((n) & 0xf0000000) >> 28 )
 #define TOC_TRACK(n) ( ((n) & 0x00ff0000) >> 16 )
+
+/* Sets the sector size */
+void set_sector_size (int size);
 
 /* Command execution sequence */
 int cdrom_exec_cmd(int cmd, void *param);
