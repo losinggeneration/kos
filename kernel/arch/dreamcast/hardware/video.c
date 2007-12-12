@@ -11,20 +11,20 @@
 #include <string.h>
 #include <stdio.h>
 
-//-----------------------------------------------------------------------------
+/*-----------------------------------------------------------------------------*/
 CVSID("$Id: video.c,v 1.11.2.2 2003/08/02 01:52:31 bardtx Exp $");
-//-----------------------------------------------------------------------------
+/*-----------------------------------------------------------------------------*/
 
 
-//-----------------------------------------------------------------------------
-// This table is indexed w/ DM_*
+/*-----------------------------------------------------------------------------*/
+ /* This table is indexed w/ DM_* */
 vid_mode_t vid_builtin[DM_MODE_COUNT] = {
-	// NULL mode..
-	// DM_INVALID = 0
+	/* NULL mode.. */
+	/* DM_INVALID = 0 */
 	{ 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, { 0, 0, 0, 0 } },
 
-	// 320x240 VGA 60Hz
-	// DM_320x240_VGA
+	/* 320x240 VGA 60Hz */
+	/* DM_320x240_VGA */
 	{
 		DM_320x240,
 		320, 240,
@@ -40,8 +40,8 @@ vid_mode_t vid_builtin[DM_MODE_COUNT] = {
 		{ 0, 0, 0, 0 }
 	},
 
-	// 320x240 NTSC 60Hz
-	// DM_320x240_NTSC
+	/* 320x240 NTSC 60Hz */
+	/* DM_320x240_NTSC */
 	{
 		DM_320x240,
 		320, 240,
@@ -57,8 +57,8 @@ vid_mode_t vid_builtin[DM_MODE_COUNT] = {
 		{ 0, 0, 0, 0 }
 	},
 
-	// 640x480 VGA 60Hz
-	// DM_640x480_VGA
+	/* 640x480 VGA 60Hz */
+	/* DM_640x480_VGA */
 	{
 		DM_640x480,
 		640, 480,
@@ -74,8 +74,8 @@ vid_mode_t vid_builtin[DM_MODE_COUNT] = {
 		{ 0, 0, 0, 0 }
 	},
 
-	// 640x480 NTSC 60Hz IL
-	// DM_640x480_NTSC_IL
+	/* 640x480 NTSC 60Hz IL */
+	/* DM_640x480_NTSC_IL */
 	{
 		DM_640x480,
 		640, 480,
@@ -91,13 +91,13 @@ vid_mode_t vid_builtin[DM_MODE_COUNT] = {
 		{ 0, 0, 0, 0 }
 	},
 
-	// 800x608 NTSC 60Hz (VGA) [BROKEN!]
-	// DM_800x608_VGA
+	/* 800x608 NTSC 60Hz (VGA) [BROKEN!] */
+	/* DM_800x608_VGA */
 	{
 		DM_800x608,
 		320, 240,
 		VID_INTERLACE,
-		1/*CT_ANY*/, // This will block the mode from being set.
+		1/*CT_ANY*/, /* This will block the mode from being set. */
 		0,
 		262, 857,
 		164, 24,
@@ -108,8 +108,8 @@ vid_mode_t vid_builtin[DM_MODE_COUNT] = {
 		{ 0, 0, 0, 0 }
 	},
 
-	// 640x480 PAL 50Hz IL
-	// DM_640x480_PAL_IL
+	/* 640x480 PAL 50Hz IL */
+	/* DM_640x480_PAL_IL */
 	{
 		DM_640x480,
 		640, 480,
@@ -125,8 +125,8 @@ vid_mode_t vid_builtin[DM_MODE_COUNT] = {
 		{ 0, 0, 0, 0 }
 	},
 
-	// 256x256 PAL 50Hz IL (seems to output the same w/o VID_PAL, ie. in NTSC IL mode)
-	// DM_256x256_PAL_IL
+	/* 256x256 PAL 50Hz IL (seems to output the same w/o VID_PAL, ie. in NTSC IL mode) */
+	/* DM_256x256_PAL_IL */
 	{
 		DM_256x256,
 		256, 256,
@@ -142,8 +142,8 @@ vid_mode_t vid_builtin[DM_MODE_COUNT] = {
 		{ 0, 0, 0, 0 }
 	},
 
-	// 768x480 NTSC 60Hz IL (thanks DCGrendel)
-	// DM_768x480_NTSC_IL
+	/* 768x480 NTSC 60Hz IL (thanks DCGrendel) */
+	/* DM_768x480_NTSC_IL */
 	{
 		DM_768x480,
 		768, 480,
@@ -159,8 +159,8 @@ vid_mode_t vid_builtin[DM_MODE_COUNT] = {
 		{ 0, 0, 0, 0 }
 	},
 
-	// 768x576 PAL 50Hz IL (DCG)
-	// DM_768x576_PAL_IL
+	/* 768x576 PAL 50Hz IL (DCG) */
+	/* DM_768x576_PAL_IL */
 	{
 		DM_768x576,
 		768, 576,
@@ -176,8 +176,8 @@ vid_mode_t vid_builtin[DM_MODE_COUNT] = {
 		{ 0, 0, 0, 0 }
 	},
 
-	// 768x480 PAL 50Hz IL
-	// DM_768x480_PAL_IL
+	/* 768x480 PAL 50Hz IL */
+	/* DM_768x480_PAL_IL */
 	{
 		DM_768x480,
 		768, 480,
@@ -193,8 +193,8 @@ vid_mode_t vid_builtin[DM_MODE_COUNT] = {
 		{ 0, 0, 0, 0 }
 	},
 
-	// 320x240 PAL 50Hz (thanks Marco Martins aka Mekanaizer)
-	// DM_320x240_PAL
+	/* 320x240 PAL 50Hz (thanks Marco Martins aka Mekanaizer) */
+	/* DM_320x240_PAL */
 	{
 		DM_320x240,
 		320, 240,
@@ -210,21 +210,21 @@ vid_mode_t vid_builtin[DM_MODE_COUNT] = {
 		{ 0, 0, 0, 0 }
 	},
 
-	// END
-	// DM_SENTINEL
+	/* END */
+	/* DM_SENTINEL */
 	{ 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, { 0, 0, 0, 0 } }
 
-	// DM_MODE_COUNT
+	/* DM_MODE_COUNT */
 };
 
-//-----------------------------------------------------------------------------
+/*-----------------------------------------------------------------------------*/
 volatile uint32	*regs = (uint32*)0xA05F8000;
 vid_mode_t	currmode = { 0 };
 vid_mode_t	*vid_mode = 0;
 uint16		*vram_s;
 uint32	 	*vram_l;
 
-//-----------------------------------------------------------------------------
+/*-----------------------------------------------------------------------------*/
 /* Checks the attached cable type (to the A/V port). Returns
    one of the following:
      0 == VGA
@@ -242,34 +242,34 @@ int vid_check_cable() {
 	
 	*porta = (*porta & 0xfff0ffff) | 0x000a0000;
 	
-	// Read port8 and port9
+	/* Read port8 and port9 */
 	return (*((uint16*)(porta + 1)) >> 8) & 3;
 }
 
-//-----------------------------------------------------------------------------
+/*-----------------------------------------------------------------------------*/
 void vid_set_mode(int dm, int pm) {
 	vid_mode_t mode;
 	int i, ct, found;
 
 	ct = vid_check_cable();
 
-	// Check to see if we should use a direct mode index, a generic
-	// mode check, or if it's just invalid.
+	/* Check to see if we should use a direct mode index, a generic
+	   mode check, or if it's just invalid. */
 	if (dm > DM_INVALID && dm < DM_SENTINEL) {
 		memcpy(&mode, &vid_builtin[dm], sizeof(vid_mode_t));
 	} else if (dm >= DM_GENERIC_FIRST && dm <= DM_GENERIC_LAST) {
 		found = 0;
 		for (i=1; i<DM_SENTINEL; i++) {
-			// Is it the right generic mode?
+			/* Is it the right generic mode? */
 			if (vid_builtin[i].generic != dm)
 				continue;
 
-			// Do we have the right cable type?
+			/* Do we have the right cable type? */
 			if (vid_builtin[i].cable_type != CT_ANY &&
 					vid_builtin[i].cable_type != ct)
 				continue;
 
-			// Ok, nothing else to check right now -- we've got our mode
+			/* Ok, nothing else to check right now -- we've got our mode */
 			memcpy(&mode, &vid_builtin[i], sizeof(vid_mode_t));
 			found = 1;
 			break;
@@ -283,40 +283,40 @@ void vid_set_mode(int dm, int pm) {
 		return;
 	}
 	
-	// We set this here so actual mode is bit-depth independent..
+	/* We set this here so actual mode is bit-depth independent.. */
 	mode.pm = pm;
 		
-	// This is also to be generic
+	/* This is also to be generic */
 	mode.cable_type = ct;
 		
-	// This will make a private copy of our "mode"
+	/* This will make a private copy of our "mode" */
 	vid_set_mode_ex(&mode);
 }
 
-//-----------------------------------------------------------------------------
+/*-----------------------------------------------------------------------------*/
 void vid_set_mode_ex(vid_mode_t *mode) {
 	static uint8 bpp[4] = { 2, 2, 0, 4 };
 	uint16 ct;
 	uint32 data;
 	
 	
-	// Verify cable type for video mode.
+	/* Verify cable type for video mode. */
 	ct = vid_check_cable();
 	if (mode->cable_type != CT_ANY) {
 		if (mode->cable_type != ct) {
-			// Maybe this should have the ability to be forced (thru param)
-			// so you can set a mode with VGA params with RGB cable type?
-			//ct=mode->cable_type;
+			/* Maybe this should have the ability to be forced (thru param)
+			   so you can set a mode with VGA params with RGB cable type? */
+			/*ct=mode->cable_type; */
 			dbglog(DBG_ERROR, "vid_set_mode: Mode not allowed for this cable type (%i!=%i)\n", mode->cable_type, ct);
 			return;
 		}
 	}
 
-	// Blank screen and reset display enable (looks nicer)
-	regs[0x3A] |= 8;	// Blank
-	regs[0x11] &= ~1;	// Display disable
+	/* Blank screen and reset display enable (looks nicer) */
+	regs[0x3A] |= 8;	/* Blank */
+	regs[0x11] &= ~1;	/* Display disable */
 
-	// Clear interlace flag if VGA (this maybe should be in here?)
+	/* Clear interlace flag if VGA (this maybe should be in here?) */
 	if (ct == CT_VGA) {
 		mode->flags &= ~VID_INTERLACE;
 		if (mode->flags & VID_LINEDOUBLE)
@@ -329,7 +329,7 @@ void vid_set_mode_ex(vid_mode_t *mode) {
 	
 	vid_border_color(0, 0, 0);
 	
-	// Pixelformat
+	/* Pixelformat */
 	data = (mode->pm << 2);
 	if (ct == CT_VGA) {
 		data |= 1 << 23;
@@ -338,10 +338,10 @@ void vid_set_mode_ex(vid_mode_t *mode) {
 	}
 	regs[0x11] = data;
 	
-	// Linestride
+	/* Linestride */
 	regs[0x13] = (mode->width * bpp[mode->pm]) / 8;
 
-	// Display size
+	/* Display size */
 	data = ((mode->width * bpp[mode->pm]) / 4) - 1;
 	if (ct == CT_VGA || (!(mode->flags & VID_INTERLACE))) {
 		data |= (1 << 20) | ((mode->height - 1) << 10);
@@ -351,14 +351,14 @@ void vid_set_mode_ex(vid_mode_t *mode) {
 	}
 	regs[0x17] = data;
 
-	// vblank irq
+	/* vblank irq */
 	if(ct == CT_VGA) {
 		regs[0x33] = (mode->scanint1 << 16) | (mode->scanint2 << 1);
 	} else {
 		regs[0x33] = (mode->scanint1 << 16) | mode->scanint2;
 	}
 	
-	// Interlace stuff
+	/* Interlace stuff */
 	data = 0x100;
 	if (mode->flags & VID_INTERLACE) {
 		data |= 0x10;
@@ -370,21 +370,21 @@ void vid_set_mode_ex(vid_mode_t *mode) {
 	}
 	regs[0x34] = data;
 	
-	// Border window
+	/* Border window */
 	regs[0x35] = (mode->borderx1 << 16) | mode->borderx2;
 	regs[0x37] = (mode->bordery1 << 16) | mode->bordery2;
 	
-	// Scanlines and clocks.
+	/* Scanlines and clocks. */
 	regs[0x36] = (mode->scanlines << 16) | mode->clocks;
 	
-	// Horizontal pixel doubling
+	/* Horizontal pixel doubling */
 	if (mode->flags & VID_PIXELDOUBLE) {
 		regs[0x3A] |= 0x100;
 	} else {
 		regs[0x3A] &= ~0x100;
 	}
 	
-	// Bitmap window
+	/* Bitmap window */
 	regs[0x3B] = mode->bitmapx;
 	data = mode->bitmapy;
 	if (mode->flags & VID_PAL) {
@@ -393,43 +393,43 @@ void vid_set_mode_ex(vid_mode_t *mode) {
 	data = (data << 16) | mode->bitmapy;
 	regs[0x3C] = data;
 	
-	// Everything is ok
+	/* Everything is ok */
 	memcpy(&currmode, mode, sizeof(vid_mode_t));
 	vid_mode = &currmode;
 	
 	vid_set_start(0);
 
-	// Set cable type
+	/* Set cable type */
 	if (mode->cable_type & 1) {
 		*((vuint32*)0xa0702c00) |= 0x300;
 	} else {
 		*((vuint32*)0xa0702c00) &= ~0x300;
 	}
 
-	// Re-enable the display
+	/* Re-enable the display */
 	regs[0x3A] &= ~8;
 	regs[0x11] |= 1;
 }
 
-//-----------------------------------------------------------------------------
+/*-----------------------------------------------------------------------------*/
 void vid_set_start(uint32 base) {
 	static uint8 bpp[4] = { 2, 2, 0, 4 };
 
-	// Set vram base of current framebuffer
+	/* Set vram base of current framebuffer */
 	base &= 0x007FFFFF;
 	regs[0x14] = base;
 	
-	// These are nice to have.
+	/* These are nice to have. */
 	vram_s = (uint16*)(0xA5000000|base);
 	vram_l = (uint32*)(0xA5000000|base);
 
-	// Set odd-field if interlaced.
+	/* Set odd-field if interlaced. */
 	if (vid_mode->flags & VID_INTERLACE) {
 		regs[0x15] = base + (currmode.width * bpp[currmode.pm]);
 	}
 }
 
-//-----------------------------------------------------------------------------
+/*-----------------------------------------------------------------------------*/
 void vid_flip(int fb) {
 	uint16 oldfb;
 
@@ -448,14 +448,14 @@ void vid_flip(int fb) {
 	vid_set_start(vid_mode->fb_base[vid_mode->fb_curr]);
 }
 
-//-----------------------------------------------------------------------------
+/*-----------------------------------------------------------------------------*/
 void vid_border_color(int r, int g, int b) {
 	regs[0x0040/4] = ((r & 0xFF) << 16) |
 			 ((g & 0xFF) << 8) |
 			 (b & 0xFF);
 }
 
-//-----------------------------------------------------------------------------
+/*-----------------------------------------------------------------------------*/
 /* Clears the screen with a given color
 
 	[This is the old KOS function by Dan.]
@@ -484,7 +484,7 @@ void vid_clear(int r, int g, int b) {
 	}
 }
 
-//-----------------------------------------------------------------------------
+/*-----------------------------------------------------------------------------*/
 /* Clears all of video memory as quickly as possible
 
 	[This is the old KOS function by Dan.]
@@ -495,7 +495,7 @@ void vid_empty() {
 	sq_clr((uint32 *)0xa5000000, 8*1024*1024);
 }
 
-//-----------------------------------------------------------------------------
+/*-----------------------------------------------------------------------------*/
 /* Waits for a vertical refresh to start. This is the period between
    when the scan beam reaches the bottom of the picture, and when it
    starts again at the top.
@@ -512,17 +512,17 @@ void vid_waitvbl() {
 		;
 }
 
-//-----------------------------------------------------------------------------
+/*-----------------------------------------------------------------------------*/
 void vid_init(int disp_mode, int pixel_mode) {
-	// Set mode and clear vram
+	/* Set mode and clear vram */
 	vid_set_mode(disp_mode, pixel_mode);
 	vid_clear(0, 0, 0);
 	vid_flip(0);
 }
 
-//-----------------------------------------------------------------------------
+/*-----------------------------------------------------------------------------*/
 void vid_shutdown() {
-	// Play nice with loaders, like KOS used to do.
+	/* Play nice with loaders, like KOS used to do. */
 	vid_init(DM_640x480, PM_RGB565);
 }
 

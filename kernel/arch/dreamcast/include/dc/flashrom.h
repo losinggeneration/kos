@@ -28,23 +28,23 @@ __BEGIN_DECLS
 
 /**
   An enumeration of partitions available in the flashrom. */
-#define FLASHROM_PT_SYSTEM	0	//< Factory settings (read-only, 8K)
-#define FLASHROM_PT_RESERVED	1	//< reserved (all 0s, 8K)
-#define FLASHROM_PT_BLOCK_1	2	//< Block allocated (16K)
-#define FLASHROM_PT_SETTINGS	3	//< Game settings (block allocated, 32K)
-#define FLASHROM_PT_BLOCK_2	4	//< Block allocated (64K)
+#define FLASHROM_PT_SYSTEM		0	/*< Factory settings (read-only, 8K) */
+#define FLASHROM_PT_RESERVED	1	/*< reserved (all 0s, 8K) */
+#define FLASHROM_PT_BLOCK_1		2	/*< Block allocated (16K) */
+#define FLASHROM_PT_SETTINGS	3	/*< Game settings (block allocated, 32K) */
+#define FLASHROM_PT_BLOCK_2		4	/*< Block allocated (64K) */
 
 /**
   An enumeration of logical blocks available in the flashrom. */
-#define FLASHROM_B1_SYSCFG	0x05	//< System config (BLOCK_1)
-#define FLASHROM_B1_IP_SETTINGS	0xE0	//< IP settings for BBA (BLOCK_1)
-#define FLASHROM_B1_EMAIL	0xE2	//< Email address (BLOCK_1)
-#define FLASHROM_B1_SMTP	0xE4	//< SMTP server setting (BLOCK_1)
-#define FLASHROM_B1_POP3	0xE5	//< POP3 server setting (BLOCK_1)
-#define FLASHROM_B1_POP3LOGIN	0xE6	//< POP3 login setting (BLOCK_1)
-#define FLASHROM_B1_POP3PASSWD	0xE7	//< POP3 password setting + proxy (BLOCK_1)
-#define FLASHROM_B1_PPPLOGIN	0xE8	//< PPP username + proxy (BLOCK_1)
-#define FLASHROM_B1_PPPPASSWD	0xE9	//< PPP passwd (BLOCK_1)
+#define FLASHROM_B1_SYSCFG		0x05	/*< System config (BLOCK_1) */
+#define FLASHROM_B1_IP_SETTINGS	0xE0	/*< IP settings for BBA (BLOCK_1) */
+#define FLASHROM_B1_EMAIL		0xE2	/*< Email address (BLOCK_1) */
+#define FLASHROM_B1_SMTP		0xE4	/*< SMTP server setting (BLOCK_1) */
+#define FLASHROM_B1_POP3		0xE5	/*< POP3 server setting (BLOCK_1) */
+#define FLASHROM_B1_POP3LOGIN	0xE6	/*< POP3 login setting (BLOCK_1) */
+#define FLASHROM_B1_POP3PASSWD	0xE7	/*< POP3 password setting + proxy (BLOCK_1) */
+#define FLASHROM_B1_PPPLOGIN	0xE8	/*< PPP username + proxy (BLOCK_1) */
+#define FLASHROM_B1_PPPPASSWD	0xE9	/*< PPP passwd (BLOCK_1) */
 
 /**
   Implements the FLASHROM_INFO syscall; given a partition ID,
@@ -101,9 +101,9 @@ int flashrom_get_block(int partid, int blockid, uint8 * buffer_out);
   This struct will be filled by calling the flashrom_get_syscfg call
   below. */
 typedef struct flashrom_syscfg {
-	int	language;	//< Language setting (see defines above)
-	int	audio;		//< 0 == mono, 1 == stereo
-	int	autostart;	//< 0 == off, 1 == on
+	int	language;	/*< Language setting (see defines above) */
+	int	audio;		/*< 0 == mono, 1 == stereo */
+	int	autostart;	/*< 0 == off, 1 == on */
 } flashrom_syscfg_t;
 
 /**
@@ -136,37 +136,37 @@ int flashrom_get_region();
   This struct will be filled by calling flashrom_get_isp_settings below.
   Thanks to Sam Steele for this info. */
 typedef struct flashrom_ispcfg {
-	int	ip_valid;	//< >0 if the IP settings are valid
-	int	method;		//< DHCP, Static, dialup(?), PPPoE
-	uint8	ip[4];		//< Host IP address
-	uint8	nm[4];		//< Netmask
-	uint8	bc[4];		//< Broadcast address
-	uint8	gw[4];		//< Gateway address
-	uint8	dns[2][4];	//< DNS servers (2)
-	char	hostname[24];	//< DHCP/Host name
+	int	ip_valid;		/*< >0 if the IP settings are valid */
+	int	method;			/*< DHCP, Static, dialup(?), PPPoE */
+	uint8	ip[4];		/*< Host IP address */
+	uint8	nm[4];		/*< Netmask */
+	uint8	bc[4];		/*< Broadcast address */
+	uint8	gw[4];		/*< Gateway address */
+	uint8	dns[2][4];	/*< DNS servers (2) */
+	char	hostname[24];	/*< DHCP/Host name */
 
-	int	email_valid;	//< >0 if the email setting is valid
-	char	email[48];	//< Email address
+	int	email_valid;	/*< >0 if the email setting is valid */
+	char	email[48];	/*< Email address */
 
-	int	smtp_valid;	//< >0 if the smtp setting is valid
-	char	smtp[28];	//< SMTP server
+	int	smtp_valid;		/*< >0 if the smtp setting is valid */
+	char	smtp[28];	/*< SMTP server */
 
-	int	pop3_valid;	//< >0 if the pop3 setting is valid
-	char	pop3[24];	//< POP3 server
+	int	pop3_valid;		/*< >0 if the pop3 setting is valid */
+	char	pop3[24];	/*< POP3 server */
 
-	int	pop3_login_valid;	//< >0 if the login setting is valid
-	char	pop3_login[20];		//< POP3 login
+	int	pop3_login_valid;		/*< >0 if the login setting is valid */
+	char	pop3_login[20];		/*< POP3 login */
 
-	int	pop3_passwd_valid;	//< >0 if the passwd/proxy setting is valid
-	char	pop3_passwd[32];	//< POP3 passwd
-	char	proxy_host[16];		//< Proxy server hostname
+	int	pop3_passwd_valid;		/*< >0 if the passwd/proxy setting is valid */
+	char	pop3_passwd[32];	/*< POP3 passwd */
+	char	proxy_host[16];		/*< Proxy server hostname */
 
-	int	ppp_login_valid;	//< >0 if the PPP login/proxy setting is valid
-	int	proxy_port;		//< Proxy server port
-	char	ppp_login[8];		//< PPP login
+	int	ppp_login_valid;	/*< >0 if the PPP login/proxy setting is valid */
+	int	proxy_port;			/*< Proxy server port */
+	char	ppp_login[8];	/*< PPP login */
 
-	int	ppp_passwd_valid;	//< >0 if the PPP passwd setting is valid
-	char	ppp_passwd[20];		//< PPP password
+	int	ppp_passwd_valid;	/*< >0 if the PPP passwd setting is valid */
+	char	ppp_passwd[20];	/*< PPP password */
 } flashrom_ispcfg_t;
 
 /**

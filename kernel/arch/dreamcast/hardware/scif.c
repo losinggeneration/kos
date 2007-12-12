@@ -42,7 +42,7 @@ kernel or for debugging it.
 static int serial_baud = DEFAULT_SERIAL_BAUD,
 	serial_fifo = DEFAULT_SERIAL_FIFO;
 
-// This will get set to zero if we fail to send.
+/* This will get set to zero if we fail to send. */
 static int serial_enabled = 1;
 
 /* Set serial parameters; this is not platform independent like I want
@@ -52,7 +52,7 @@ void scif_set_parameters(int baud, int fifo) {
 	serial_fifo = fifo;
 }
 
-// Receive ring buffer
+/* Receive ring buffer */
 #define BUFSIZE 1024
 static uint8 recvbuf[BUFSIZE];
 static int rb_head = 0, rb_tail = 0, rb_cnt = 0;
@@ -67,11 +67,11 @@ static void rb_push_char(int c) {
 	rb_head = (rb_head + 1) % BUFSIZE;
 	rb_cnt++;
 
-	// If we're within 32 bytes of being out of space, pause for
-	// the moment.
+	/* If we're within 32 bytes of being out of space, pause for
+	   the moment. */
 	if (!rb_paused && (BUFSIZE - rb_cnt) < 32) {
 		rb_paused = 1;
-		SCSPTR2 = 0x20;		// Set CTS=0
+		SCSPTR2 = 0x20;		/* Set CTS=0 */
 	}
 }
 
@@ -81,7 +81,7 @@ static int rb_pop_char() {
 	rb_tail = (rb_tail + 1) % BUFSIZE;
 	rb_cnt--;
 
-	// If we're paused and clear again, re-enabled receiving.
+	/* If we're paused and clear again, re-enabled receiving. */
 	if (rb_paused && (BUFSIZE - rb_cnt) >= 64) {
 		rb_paused = 0;
 		SCSPTR2 = 0x00;
@@ -104,14 +104,14 @@ static int rb_space_used() {
    out if possible. If our internal ring buffer comes close to overflowing,
    the best we can do is twiddle RTS/CTS for a while. */
 static void scif_err_irq(irq_t src, irq_context_t * cxt) {
-	// Clear status bits
+	/* Clear status bits */
 	SCSCR2 &= ~0x08;
 	SCSCR2 |= 0x08;
 
 	printf("scif_err_irq called\n");
 
-	// Did we get an error condition?
-	if (SCFSR2 & 0x9c) {	// Check ER, BRK, FER, PER
+	/* Did we get an error condition? */
+	if (SCFSR2 & 0x9c) {	/* Check ER, BRK, FER, PER */
 		printf("SCFSR2 status was %04x\n", SCFSR2);
 		/* Try to clear it */
 		SCFCR2 = 0x06;
@@ -128,29 +128,26 @@ static void scif_err_irq(irq_t src, irq_context_t * cxt) {
 }
 
 static void scif_data_irq(irq_t src, irq_context_t * cxt) {
-	// Clear status bits
+	/* Clear status bits */
 	SCSCR2 &= ~0x40;
 	SCSCR2 |= 0x40;
 
-	//printf("scif_data_irq called\n");
-
-	// Check for received data available.
+	/* Check for received data available. */
 	if (SCFSR2 & 3) {
 		while (SCFDR2 & 0x1f) {
 			int c = SCFRDR2;
-			//printf("received char '%d'\n", c);
 			rb_push_char(c);
 		}
 		SCFSR2 &= ~3;
 	}
 }
 
-// Are we using IRQs?
+/* Are we using IRQs? */
 static int scif_irq_usage = 0;
 int scif_set_irq_usage(int on) {
 	scif_irq_usage = on;
 
-	// Clear out the buffer in any case
+	/* Clear out the buffer in any case */
 	rb_reset();
 
 	if (scif_irq_usage) {
@@ -176,26 +173,26 @@ int scif_set_irq_usage(int on) {
 	return 0;
 }
 
-// We are always detected, though we might end up realizing there's no
-// cable connected later...
+/* We are always detected, though we might end up realizing there's no
+   cable connected later... */
 int scif_detected() {
 	return 1;
 }
 
-// We use this for the dbgio interface because we always init SCIF.
+/* We use this for the dbgio interface because we always init SCIF. */
 int scif_init_fake() {
 	return 0;
 }
 
 /* Initialize the SCIF port; baud_rate must be at least 9600 and
    no more than 57600. 115200 does NOT work for most PCs. */
-// recv trigger to 1 byte
+/* recv trigger to 1 byte */
 int scif_init() {
 	int i;
 	/* int fifo = 1; */
 
-	// If dcload-serial is active, then do nothing here, or we'll
-	// screw that up.
+	/*	If dcload-serial is active, then do nothing here, or we'll 
+		screw that up. */
 	if (dcload_type == DCLOAD_TYPE_SER)
 		return 0;
 
@@ -209,7 +206,7 @@ int scif_init() {
 	SCSMR2 = 0;
 	
 	/* If baudrate unset, set baudrate, N = P0/(32*B)-1 */
-	// B = P0/32*(N+1)
+	/* B = P0/32*(N+1) */
 	if (SCBRR2 == 0xff)
 		SCBRR2 = (50000000 / (32 * serial_baud)) - 1;
 
@@ -252,7 +249,7 @@ int scif_read() {
 	}
 
 	if (scif_irq_usage) {
-		// Do we have anything ready?
+		/* Do we have anything ready? */
 		if (rb_space_used() <= 0) {
 			errno = EAGAIN;
 			return -1;
@@ -266,10 +263,10 @@ int scif_read() {
 			return -1;
 		}
 
-		// Get the input char
+		/* Get the input char */
 		c = SCFRDR2;
 
-		// Ack
+		/* Ack */
 		SCFSR2 &= ~0x92;
 
 		return c;
@@ -366,7 +363,7 @@ int scif_read_buffer(uint8 *data, int len) {
 	return i;
 }
 
-// Tie all of that together into a dbgio package.
+/* Tie all of that together into a dbgio package. */
 dbgio_handler_t dbgio_scif = {
 	"scif",
 	scif_detected,

@@ -102,7 +102,7 @@ __BEGIN_DECLS
 	: "=f" (__value) : "f" (__arg) : "fpul", "fr0"); \
 	__value; })
 
-// Floating point inner product (dot product)
+/* Floating point inner product (dot product) */
 #define __fipr(x, y, z, w, a, b, c, d) ({ \
 	register float __x __asm__("fr0") = (x); \
 	register float __y __asm__("fr1") = (y); \
@@ -120,7 +120,7 @@ __BEGIN_DECLS
 		); \
 		__w; })
 
-// Floating point inner product w/self (square of vector magnitude)
+/* Floating point inner product w/self (square of vector magnitude) */
 #define __fipr_magnitude_sqr(x, y, z, w) ({ \
 	register float __x __asm__("fr4") = (x); \
 	register float __y __asm__("fr5") = (y); \
@@ -133,13 +133,13 @@ __BEGIN_DECLS
 		); \
 		__w; })
 
-// Returns v1 dot v2 (inner product)
+/* Returns v1 dot v2 (inner product) */
 extern inline float fipr(float x, float y, float z, float w,
 		float a, float b, float c, float d) {
 	return __fipr(x, y, z, w, a, b, c, d);
 }
 
-// Returns v1 dot v1 (square of magnitude)
+/* Returns v1 dot v1 (square of magnitude) */
 extern inline float fipr_magnitude_sqr(float x, float y, float z, float w) {
 	return __fipr_magnitude_sqr(x, y, z, w);
 }
