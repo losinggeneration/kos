@@ -71,7 +71,7 @@
 #include <unistd.h> /* Userland prototypes of the Unix std system calls    */
 #include <fcntl.h>  /* Flag value for file handling functions              */
 #include <time.h>
-#ifdef _WIN32
+#if defined(_WIN32) && !defined(__CYGWIN__)
 #	include <getopt.h>
 #else
 #	include <fnmatch.h>
