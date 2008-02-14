@@ -1,7 +1,7 @@
 /* KallistiOS ##version##
 
    kernel/net/net_udp.c
-   Copyright (C) 2005, 2006, 2007 Lawrence Sebald
+   Copyright (C) 2005, 2006, 2007, 2008 Lawrence Sebald
 
 */
 
@@ -11,7 +11,7 @@
 #include <arpa/inet.h>
 #include <kos/net.h>
 #include <kos/mutex.h>
-#include <kos/cond.h>
+#include <kos/genwait.h>
 #include <sys/queue.h>
 #include <kos/dbgio.h>
 #include <kos/fs_socket.h>
@@ -44,7 +44,6 @@ LIST_HEAD(udp_sock_list, udp_sock);
 
 static struct udp_sock_list net_udp_sockets = LIST_HEAD_INITIALIZER(0);
 static mutex_t *udp_mutex = NULL;
-static condvar_t *udp_packets_ready = NULL;
 
 int net_udp_accept(net_socket_t *hnd, struct sockaddr *addr,
                    socklen_t *addr_len) {
@@ -232,7 +231,7 @@ ssize_t net_udp_recv(net_socket_t *hnd, void *buffer, size_t length, int flags) 
     }
 
     if(TAILQ_EMPTY(&udpsock->packets)) {
-        cond_wait(udp_packets_ready, udp_mutex);
+        genwait_wait(udpsock, "net_udp_recv", 0, NULL);
     }
 
     pkt = TAILQ_FIRST(&udpsock->packets);
@@ -296,7 +295,7 @@ ssize_t net_udp_recvfrom(net_socket_t *hnd, void *buffer, size_t length,
     }
 
     while(TAILQ_EMPTY(&udpsock->packets)) {
-        cond_wait(udp_packets_ready, udp_mutex);
+        genwait_wait(udpsock, "net_udp_recvfrom", 0, NULL);
     }
 
     pkt = TAILQ_FIRST(&udpsock->packets);
@@ -663,7 +662,7 @@ int net_udp_input(netif_t *src, ip_hdr_t *ip, const uint8 *data, int size) {
 
             TAILQ_INSERT_TAIL(&sock->packets, pkt, pkt_queue);
 
-            cond_broadcast(udp_packets_ready);
+            genwait_wake_one(sock);
 
             mutex_unlock(udp_mutex);
 
@@ -755,22 +754,10 @@ int net_udp_init() {
         return -1;
     }
 
-    udp_packets_ready = cond_create();
-
-    if(udp_packets_ready == NULL) {
-        mutex_destroy(udp_mutex);
-        udp_mutex = NULL;
-
-        return -1;
-    }
-
     return 0;
 }
 
 void net_udp_shutdown() {
     if(udp_mutex != NULL)
         mutex_destroy(udp_mutex);
-
-    if(udp_packets_ready != NULL)
-        cond_destroy(udp_packets_ready);
 }
