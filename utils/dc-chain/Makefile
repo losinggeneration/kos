@@ -16,6 +16,8 @@
 # build-sh4-gcc: build-sh4-gcc-pass1 build-sh4-newlib build-sh4-gcc-pass2
 # build-arm-gcc: build-arm-gcc-pass1
 # build-sh4-newlib: build-sh4-newlib-only fixup-sh4-newlib
+# gdb
+# insight
 
 # User configuration
 sh_target=sh-elf
@@ -29,6 +31,8 @@ kos_base=$(kos_root)/kos
 binutils_ver=2.17
 gcc_ver=3.4.6
 newlib_ver=1.12.0
+gdb_ver=6.7.1
+insight_ver=6.7.1
 thread_model=posix
 erase=0
 verbose=0
@@ -167,6 +171,95 @@ $(build_gcc_pass2): logdir
 
 # ---- }}}}
 
+
+# GDB building
+
+gdb-$(gdb_ver).tar.bz2:
+	@echo "+++ Downloading GDB..."
+	wget -c ftp://ftp.gnu.org/gnu/gdb/gdb-$(gdb_ver).tar.bz2
+
+unpack_gdb: gdb-$(gdb_ver).tar.bz2 unpack_gdb_stamp
+
+unpack_gdb_stamp: 
+	@echo "+++ Unpacking GDB..."
+	rm -f $@
+	rm -rf gdb-$(gdb_ver)
+	tar jxf gdb-$(gdb_ver).tar.bz2
+	touch $@
+
+build_gdb: log = $(logdir)/gdb-$(gdb_ver).log
+build_gdb: logdir
+build_gdb: unpack_gdb build_gdb_stamp
+
+build_gdb_stamp:
+	@echo "+++ Building GDB..."
+	rm -f $@
+	> $(log)
+	rm -rf build-gdb-$(gdb_ver)
+	mkdir build-gdb-$(gdb_ver)
+	cd build-gdb-$(gdb_ver); ../gdb-$(gdb_ver)/configure \
+	    --prefix=$(sh_prefix) \
+	    --target=$(sh_target) $(to_log)
+	make -C build-gdb-$(gdb_ver) $(to_log)
+	touch $@
+
+install_gdb: log = $(logdir)/gdb-$(gdb_ver).log
+install_gdb: logdir
+install_gdb: build_gdb install_gdb_stamp
+
+install_gdb_stamp:
+	@echo "+++ Installing GDB..."
+	rm -f $@
+	make -C build-gdb-$(gdb_ver) install $(to_log)
+	touch $@
+
+gdb: install_gdb
+
+
+# INSIGHT building
+
+insight-$(insight_ver).tar.bz2:
+	@echo "+++ Downloading INSIGHT..."
+	wget -c ftp://sourceware.org/pub/insight/releases/insight-$(insight_ver).tar.bz2
+
+unpack_insight: insight-$(insight_ver).tar.bz2 unpack_insight_stamp
+
+unpack_insight_stamp:
+	@echo "+++ Unpacking INSIGHT..."
+	rm -f $@
+	rm -rf insight-$(insight_ver)
+	tar jxf insight-$(insight_ver).tar.bz2
+	touch $@
+
+build_insight: log = $(logdir)/insight-$(insight_ver).log
+build_insight: logdir
+build_insight: unpack_insight build_insight_stamp
+
+build_insight_stamp:
+	@echo "+++ Building INSIGHT..."
+	rm -f $@
+	> $(log)
+	rm -rf build-insight-$(insight_ver)
+	mkdir build-insight-$(insight_ver)
+	cd build-insight-$(insight_ver); ../insight-$(insight_ver)/configure \
+	    --prefix=$(sh_prefix) \
+	    --target=$(sh_target) $(to_log)
+	make -C build-insight-$(insight_ver) $(to_log)
+	touch $@
+
+install_insight: log = $(logdir)/insight-$(insight_ver).log
+install_insight: logdir
+install_insight: build_insight install_insight_stamp
+
+install_insight_stamp:
+	@echo "+++ Installing INSIGHT..."
+	rm -f $@
+	make -C build-insight-$(insight_ver) install $(to_log)
+	touch $@
+
+insight: install_insight
+
+
 # ---- support {{{
 
 clean:
@@ -176,6 +269,8 @@ clean:
 	-rm -rf build-gcc-$(arm_target)-$(gcc_ver)
 	-rm -rf build-binutils-$(sh_target)-$(binutils_ver)
 	-rm -rf build-binutils-$(arm_target)-$(binutils_ver)
+	-rm -rf build-gdb-$(gdb_ver) install_gdb_stamp build_gdb_stamp 
+	-rm -rf build-insight-$(gdb_ver) install_insight_stamp build_insight_stamp
 
 logdir:
 	@mkdir -p $(logdir)
@@ -208,6 +303,8 @@ endif
 .PHONY: $(newlib_patches) $(binutils_patches) $(gcc_patches) $(kos_patches)
 .PHONY: all build patch build-sh4 build-arm $(build_sh4_targets) $(build_arm_targets) clean
 .PHONY: build-binutils build-newlib build-gcc-pass1 build-gcc-pass2 fixup-sh4-newlib
+.PHONY: gdb install_gdb build_gdb unpack_gdb
+.PHONY: insight install_insight build_insight unpack_insight
 
 # ---- }}}}
 
