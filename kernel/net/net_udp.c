@@ -603,11 +603,16 @@ int net_udp_setflags(net_socket_t *hnd, int flags) {
 }
 
 int net_udp_input(netif_t *src, ip_hdr_t *ip, const uint8 *data, int size) {
-    uint8 buf[size + 13];
+    uint8 buf[size + 12];
     ip_pseudo_hdr_t *ps = (ip_pseudo_hdr_t *)buf;
     uint16 checksum;
     struct udp_sock *sock;
     struct udp_pkt *pkt;
+
+    if(size <= sizeof(udp_hdr_t))   {
+        /* Discard the packet, since it is too short to be of any interest. */
+        return -1;
+    }
 
     ps->src_addr = ip->src;
     ps->dst_addr = ip->dest;
@@ -616,29 +621,18 @@ int net_udp_input(netif_t *src, ip_hdr_t *ip, const uint8 *data, int size) {
     memcpy(&ps->src_port, data, size);
     ps->length = htons(size);
 
-    /* check this.... */
-    if(size & 0x01) {
-        ps->data[size - sizeof(udp_hdr_t)] = 0;
-        checksum = ps->checksum;
-        ps->checksum = 0;
-        ps->checksum = net_ipv4_checksum(buf, size + 13);
-    }
-    else {
-        checksum = ps->checksum;
-        ps->checksum = 0;
-        ps->checksum = net_ipv4_checksum(buf, size + 12);
-    }
+    checksum = ps->checksum;
+    ps->checksum = 0;
+    ps->checksum = net_ipv4_checksum(buf, size + 12);
 
     if(checksum != ps->checksum) {
-        dbglog(DBG_KDEBUG, "net_udp: discarding UDP packet with invalid "
-                           "checksum\n"
-                           "         calculated 0x%04X, sent 0x%04X\n",
-               ps->checksum, checksum);
+        /* The checksums don't match, bail out */
         return -1;
     }
 
     if(mutex_trylock(udp_mutex)) {
-        dbglog(DBG_KDEBUG, "net_udp: discarding packet due to locked mutex\n");
+        /* Considering this function is usually called in an IRQ, if the
+           mutex is locked, there isn't much that can be done. */
         return -1;
     }
 
@@ -670,18 +664,16 @@ int net_udp_input(netif_t *src, ip_hdr_t *ip, const uint8 *data, int size) {
         }
     }
 
-    dbglog(DBG_KDEBUG, "net_udp: Discarding packet for non-opened socket\n");
     mutex_unlock(udp_mutex);
 
-    return 0;
+    return -1;
 }
 
 int net_udp_send_raw(netif_t *net, uint32 src_ip, uint16 src_port,
                      uint32 dst_ip, uint16 dst_port, const uint8 *data,
                      int size) {
-    uint8 buf[size + 13 + sizeof(udp_hdr_t)];
+    uint8 buf[size + 12 + sizeof(udp_hdr_t)];
     ip_pseudo_hdr_t *ps = (ip_pseudo_hdr_t *) buf;
-    ip_hdr_t ip;
 
     if(net == NULL && net_default_dev == NULL) {
         errno = ENETDOWN;
@@ -700,7 +692,6 @@ int net_udp_send_raw(netif_t *net, uint32 src_ip, uint16 src_port,
         ps->src_addr = src_ip;
     }
 
-    buf[size + 12 + sizeof(udp_hdr_t)] = 0;
     memcpy(ps->data, data, size);
     size += sizeof(udp_hdr_t);
 
@@ -712,34 +703,12 @@ int net_udp_send_raw(netif_t *net, uint32 src_ip, uint16 src_port,
     ps->dst_port = dst_port;
     ps->hdrlength = ps->length;
     ps->checksum = 0;
+    ps->checksum = net_ipv4_checksum(buf, size + 12);
 
-    /* Compute the UDP checksum */
-    if(size & 0x01) {
-        ps->checksum = net_ipv4_checksum(buf, size + 13);
-    }
-    else {
-        ps->checksum = net_ipv4_checksum(buf, size + 12);
-    }
-
-    /* Fill in the IPv4 Header */
-    ip.version_ihl = 0x45;
-    ip.tos = 0;
-    ip.length = htons(size + 20);
-    ip.packet_id = 0;
-    ip.flags_frag_offs = htons(0x4000);
-    ip.ttl = 64;
-    ip.protocol = 17;
-    ip.checksum = 0;
-    ip.src = ps->src_addr;
-    ip.dest = ps->dst_addr;
-
-    /* Compute the IPv4 checksum */
-    ip.checksum = net_ipv4_checksum((uint8 *) &ip, sizeof(ip_hdr_t));
-
-    /* send it away.... */
-    if(net_ipv4_send_packet(net, &ip, buf + 12, size)) {
-        /* If net_ipv4_send_packet() returns anything but 0, its an error,
-           errno should be set already from it. */
+    /* Pass everything off to the network layer to do the rest. */
+    if(net_ipv4_send(net, buf + 12, size, 0, 64, IPPROTO_UDP, ps->src_addr,
+                     ps->dst_addr)) {
+        /* If the packet send fails, errno will be set already. */
         return -1;
     }
     else {
