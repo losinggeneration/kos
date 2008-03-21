@@ -1,7 +1,7 @@
 /* KallistiOS ##version##
 
    kernel/net/net_ipv4.h
-   Copyright (C) 2005, 2007 Lawrence Sebald
+   Copyright (C) 2005, 2007, 2008 Lawrence Sebald
 
 */
 
@@ -44,7 +44,10 @@ typedef struct {
 #undef packed
 
 uint16 net_ipv4_checksum(const uint8 *data, int bytes);
-int net_ipv4_send_packet(netif_t *net, ip_hdr_t *hdr, const uint8 *data, int size);
+int net_ipv4_send_packet(netif_t *net, ip_hdr_t *hdr, const uint8 *data,
+                         int size);
+int net_ipv4_send(netif_t *net, const uint8 *data, int size, int id, int ttl,
+                  int proto, uint32 src, uint32 dst);
 int net_ipv4_input(netif_t *src, const uint8 *pkt, int pktsize);
 
 #endif /* __LOCAL_NET_IPV4_H */
