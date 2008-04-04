@@ -18,10 +18,10 @@ OBJS = $(COPYOBJS)
 SUBDIRS = 
 
 myall: $(OBJS)
-	-cp $(COPYOBJS) $(KOS_BASE)/kernel/build/
+	-cp $(COPYOBJS) $(TOPDIR)/kernel/build/
 	-rm banner.c banner.o
 
-include $(KOS_BASE)/Makefile.prefab
+include $(TOPDIR)/Makefile.prefab
 
 banner.o: banner.c
 

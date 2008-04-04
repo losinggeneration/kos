@@ -1,4 +1,4 @@
 BIN = lcd
 OBJS = lcd.o
 
-include ../Makefile.prefab
+include $(TOPDIR)/Makefile.prefab

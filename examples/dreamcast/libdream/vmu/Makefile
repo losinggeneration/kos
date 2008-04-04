@@ -1,5 +1,5 @@
 BIN = vmu
 OBJS = vmu.o
 
-include ../Makefile.prefab
+include $(TOPDIR)/Makefile.prefab
 

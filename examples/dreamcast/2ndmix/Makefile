@@ -8,7 +8,7 @@
 all: rm-elf 2ndmix.elf
 
 KOS_ROMDISK_DIR = romdisk_boot
-include $(KOS_BASE)/Makefile.rules
+include $(TOPDIR)/Makefile.rules
 
 OBJS = 2ndmix.o romdisk.o
 

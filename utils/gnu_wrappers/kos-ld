@@ -1,3 +1,4 @@
 #!/bin/sh
+source environ.sh
 
 exec ${KOS_LD} ${KOS_LDFLAGS} "$@" ${KOS_LIB_PATHS} ${KOS_LIBS}

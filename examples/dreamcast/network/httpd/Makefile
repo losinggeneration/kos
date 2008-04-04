@@ -9,7 +9,7 @@ TARGET = httpd.elf
 # List all of your C files here, but change the extension to ".o"
 OBJS = simhost.o httpd.o romdisk.o
 
-LWIPDIR = $(KOS_BASE)/../kos-ports/lwip/lwip/src
+LWIPDIR = $(TOPDIR)/../kos-ports/lwip/lwip/src
 ARCHDIR = $(LWIPDIR)/../../kos
 
 KOS_CFLAGS += -DIPv4 \
@@ -18,7 +18,7 @@ KOS_CFLAGS += -DIPv4 \
 
 all: rm-elf $(TARGET)
 
-include $(KOS_BASE)/Makefile.rules
+include $(TOPDIR)/Makefile.rules
 
 clean:
 	rm -f $(TARGET) $(OBJS) romdisk.img
@@ -34,7 +34,7 @@ romdisk.img:
 	$(KOS_GENROMFS) -f romdisk.img -d romdisk -v
 
 romdisk.o: romdisk.img
-	$(KOS_BASE)/utils/bin2o/bin2o romdisk.img romdisk romdisk.o
+	$(TOPDIR)/utils/bin2o/bin2o romdisk.img romdisk romdisk.o
 
 run: $(TARGET)
 	dc-tool -n -x $(TARGET)

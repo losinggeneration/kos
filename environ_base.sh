@@ -2,14 +2,14 @@
 # that are generated from the user config. Configure if you like.
 
 # Pull in the arch environ file
-. ${KOS_BASE}/environ_${KOS_ARCH}.sh
+. environ_${KOS_ARCH}.sh
 
 # Add the gnu wrappers dir to the path
-export PATH="${PATH}:${KOS_BASE}/utils/gnu_wrappers"
+#export PATH="${PATH}:${KOS_BASE}/utils/gnu_wrappers"
 
 # Our includes
-export KOS_INC_PATHS="${KOS_INC_PATHS} -I${KOS_BASE}/include \
--I${KOS_BASE}/kernel/arch/${KOS_ARCH}/include -I${KOS_BASE}/addons/include"
+export KOS_INC_PATHS="${KOS_INC_PATHS} -I${KOS_PATH}/include \
+-I${KOS_PATH}/include/arch/${KOS_ARCH} -I${KOS_PATH}/include/addons"
 
 #export KOS_INC_PATHS_CPP="${KOS_INC_PATHS_CPP} -I${KOS_BASE}/libk++/stlport"
 
@@ -32,5 +32,5 @@ export KOS_CPPFLAGS="${KOS_CPPFLAGS} ${KOS_INC_PATHS_CPP} -fno-operator-names -f
 export KOS_LDFLAGS="${KOS_LDFLAGS} -nostartfiles -nostdlib ${KOS_LIB_PATHS}"
 
 # Some extra vars based on architecture
-export KOS_ARCH_DIR="${KOS_BASE}/kernel/arch/${KOS_ARCH}"
-export KOS_START="${KOS_ARCH_DIR}/kernel/startup.o"
+export KOS_ARCH_DIR="${KOS_PATH}/lib/arch/${KOS_ARCH}"
+export KOS_START="${KOS_ARCH_DIR}/startup.o"

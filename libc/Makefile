@@ -47,10 +47,10 @@ endif
 SUBDIRS =
 
 all: $(OBJS)
-	-rm -f $(KOS_BASE)/kernel/build/libc/*.o
-	-cp $(OBJS) $(KOS_BASE)/kernel/build/libc/
+	-rm -f $(TOPDIR)/kernel/build/libc/*.o
+	-cp $(OBJS) $(TOPDIR)/kernel/build/libc/
 
 # Grab the shared Makefile pieces
-include $(KOS_BASE)/Makefile.prefab
+include $(TOPDIR)/Makefile.prefab
 
 

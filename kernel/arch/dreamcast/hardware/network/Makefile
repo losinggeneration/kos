@@ -10,7 +10,7 @@ OBJS = broadband_adapter.o lan_adapter.o
 
 SUBDIRS =
 
-include $(KOS_BASE)/Makefile.prefab
+include $(TOPDIR)/Makefile.prefab
 
 
 

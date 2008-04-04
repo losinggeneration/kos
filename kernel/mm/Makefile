@@ -15,5 +15,5 @@ OBJS = malloc.o cplusplus.o
 
 SUBDIRS =
 
-include $(KOS_BASE)/Makefile.prefab
+include $(TOPDIR)/Makefile.prefab
 

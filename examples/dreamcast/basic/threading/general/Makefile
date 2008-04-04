@@ -7,7 +7,7 @@
 
 all: rm-elf general_threading_test.elf
 
-include $(KOS_BASE)/Makefile.rules
+include $(TOPDIR)/Makefile.rules
 
 OBJS = general_threading_test.o
 

@@ -21,12 +21,12 @@
 defaultall: $(OBJS) subdirs linklib
 
 linklib:
-	rm -f $(KOS_BASE)/addons/lib/$(KOS_ARCH)/$(TARGET)
-	$(KOS_AR) rcs $(KOS_BASE)/addons/lib/$(KOS_ARCH)/$(TARGET) $(OBJS) $(LIB_OBJS)
+	rm -f $(TOPDIR)/lib/$(KOS_ARCH)/addons/$(TARGET)
+	$(KOS_AR) rcs $(TOPDIR)/lib/$(KOS_ARCH)/addons/$(TARGET) $(OBJS) $(LIB_OBJS)
 
 clean: defaultclean
-         
-defaultclean: clean_subdirs
-	-rm -f $(OBJS) $(KOS_BASE)/addons/lib/$(KOS_ARCH)/$(TARGET) $(LOCAL_CLEAN)
 
-include $(KOS_BASE)/Makefile.rules
+defaultclean: clean_subdirs
+	-rm -f $(OBJS) $(TOPDIR)/lib/$(KOS_ARCH)/addons/$(TARGET) $(LOCAL_CLEAN)
+
+include $(TOPDIR)/Makefile.rules

@@ -7,7 +7,7 @@
 	
 SUBDIRS=kernel sbios fs
 
-include $(KOS_BASE)/Makefile.rules
+include $(TOPDIR)/Makefile.rules
 
 all: subdirs
 clean: clean_subdirs

@@ -10,9 +10,9 @@ DIRS = genromfs wav2adpcm vqenc gba-crcfix
 # Ok for these to fail atm...
 
 all:
-	for i in $(DIRS); do $(KOS_MAKE) -C $$i; done
+	for i in $(DIRS); do $(MAKE) -C $$i; done
 
 clean:
-	for i in $(DIRS); do $(KOS_MAKE) -C $$i clean; done
+	for i in $(DIRS); do $(MAKE) -C $$i clean; done
 		
 

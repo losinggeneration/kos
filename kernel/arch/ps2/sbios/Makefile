@@ -10,7 +10,7 @@ OBJS = sbios_init_shutdown.o
 
 SUBDIRS =
 
-include $(KOS_BASE)/Makefile.prefab
+include $(TOPDIR)/Makefile.prefab
 
 
 

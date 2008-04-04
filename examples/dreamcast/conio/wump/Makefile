@@ -7,7 +7,7 @@
 
 all: rm-elf wump.elf
 
-include $(KOS_BASE)/Makefile.rules
+include $(TOPDIR)/Makefile.rules
 
 OBJS = wump.o
 

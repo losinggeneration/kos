@@ -22,7 +22,7 @@ OBJS := $(OBJS) maple_compat.o
 
 SUBDIRS =
 
-include $(KOS_BASE)/Makefile.prefab
+include $(TOPDIR)/Makefile.prefab
 
 
 

@@ -11,7 +11,7 @@ ifeq ($(KOS_SUBARCH), navi)
 	SUBDIRS += navi
 endif
 
-include $(KOS_BASE)/Makefile.rules
+include $(TOPDIR)/Makefile.rules
 
 all: subdirs
 clean: clean_subdirs

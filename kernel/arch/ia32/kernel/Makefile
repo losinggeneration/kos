@@ -20,10 +20,10 @@ OBJS = $(COPYOBJS) startup.o
 SUBDIRS = 
 
 myall: $(OBJS)
-	-cp $(COPYOBJS) $(KOS_BASE)/kernel/build/
+	-cp $(COPYOBJS) $(TOPDIR)/kernel/build/
 	-rm banner.c banner.o
 
-include $(KOS_BASE)/Makefile.prefab
+include $(TOPDIR)/Makefile.prefab
 
 banner.o: banner.c
 
@@ -33,7 +33,7 @@ banner.c: make_banner.sh
 arch_exports.o: arch_exports.c
 
 arch_exports.c: ../exports.txt
-	$(KOS_BASE)/utils/genexports/genexports.sh ../exports.txt arch_exports.c arch_symtab
+	$(TOPDIR)/utils/genexports/genexports.sh ../exports.txt arch_exports.c arch_symtab
 
 clean:
 	-rm -f banner.c

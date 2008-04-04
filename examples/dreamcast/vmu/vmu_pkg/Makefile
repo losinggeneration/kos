@@ -11,7 +11,7 @@ OBJS = vmu.o
 
 all: rm-elf $(TARGET)
 
-include $(KOS_BASE)/Makefile.rules
+include $(TOPDIR)/Makefile.rules
 
 clean:
 	-rm -f $(TARGET) $(OBJS) romdisk.*
@@ -31,7 +31,7 @@ romdisk.img:
 	$(KOS_GENROMFS) -f romdisk.img -d romdisk -v
 
 romdisk.o: romdisk.img
-	$(KOS_BASE)/utils/bin2o/bin2o romdisk.img romdisk romdisk.o
+	$(TOPDIR)/utils/bin2o/bin2o romdisk.img romdisk romdisk.o
 
 run: $(TARGET)
 	$(KOS_LOADER) $(TARGET)

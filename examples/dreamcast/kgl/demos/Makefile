@@ -7,20 +7,20 @@
 
 all:
 ifdef KOS_CCPLUS
-	$(KOS_MAKE) -C tunnel
+	$(MAKE) -C tunnel
 endif
-	$(KOS_MAKE) -C bubbles
+	$(MAKE) -C bubbles
 
 clean:
 ifdef KOS_CCPLUS
-	$(KOS_MAKE) -C tunnel clean
+	$(MAKE) -C tunnel clean
 endif
-	$(KOS_MAKE) -C bubbles clean
+	$(MAKE) -C bubbles clean
 		
 dist:
 ifdef KOS_CCPLUS
-	$(KOS_MAKE) -C tunnel dist
+	$(MAKE) -C tunnel dist
 endif
-	$(KOS_MAKE) -C bubbles dist
+	$(MAKE) -C bubbles dist
 
 

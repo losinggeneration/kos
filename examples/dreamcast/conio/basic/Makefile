@@ -7,7 +7,7 @@
 
 all: rm-elf basic.elf
 
-include $(KOS_BASE)/Makefile.rules
+include $(TOPDIR)/Makefile.rules
 
 OBJS = basic.o
 

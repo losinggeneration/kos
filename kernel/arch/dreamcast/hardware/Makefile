@@ -25,7 +25,7 @@ OBJS += sq.o scif.o
 
 SUBDIRS = pvr network maple modem
 
-include $(KOS_BASE)/Makefile.prefab
+include $(TOPDIR)/Makefile.prefab
 
 
 

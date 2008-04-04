@@ -1,5 +1,5 @@
 BIN = mouse
 OBJS = mouse.o
 
-include ../Makefile.prefab
+include $(TOPDIR)/Makefile.prefab
 

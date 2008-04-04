@@ -1,4 +1,5 @@
 #!/bin/sh
+source environ.sh
 
 # This actually does require bash...
 

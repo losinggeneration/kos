@@ -14,7 +14,7 @@ OBJS += navi_flash.o
 # SUBDIRS = fs
 SUBDIRS =
 
-include $(KOS_BASE)/Makefile.prefab
+include $(TOPDIR)/Makefile.prefab
 
 
 

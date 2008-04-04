@@ -1,5 +1,5 @@
 BIN = keyboard
 OBJS = keyboard.o
 
-include ../Makefile.prefab
+include $(TOPDIR)/Makefile.prefab
 

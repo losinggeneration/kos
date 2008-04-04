@@ -1,4 +1,5 @@
 #!/bin/sh
+source environ.sh
 
 # Make sure what mode we're in. The basic cc wrapper does a lot.
 ARGS=$*

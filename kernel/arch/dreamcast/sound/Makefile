@@ -12,8 +12,8 @@ ifdef DC_ARM_CC
 	SUBDIRS = arm
 endif
 
-include $(KOS_BASE)/Makefile.prefab
+include $(TOPDIR)/Makefile.prefab
 
 snd_stream_drv.o: subdirs arm/stream.drv
-	$(KOS_BASE)/utils/bin2o/bin2o arm/stream.drv snd_stream_drv snd_stream_drv.o
+	$(KOS_PATH)/bin/bin2o arm/stream.drv snd_stream_drv snd_stream_drv.o
 

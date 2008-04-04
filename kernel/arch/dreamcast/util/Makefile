@@ -9,6 +9,6 @@
 OBJS = vmu_pkg.o screenshot.o
 SUBDIRS = 
 
-include $(KOS_BASE)/Makefile.prefab
+include $(TOPDIR)/Makefile.prefab
 
 

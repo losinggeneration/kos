@@ -1,3 +1,4 @@
 #!/bin/sh
+source environ.sh
 
 exec ${KOS_MAKE} "$@"

@@ -4,12 +4,12 @@ TARGET = dns-client.elf
 # List all of your C files here, but change the extension to ".o"
 OBJS = dnslookup.o
 
-LWIPDIR = $(KOS_BASE)/../kos-ports/lwip/lwip/src
+LWIPDIR = $(TOPDIR)/../kos-ports/lwip/lwip/src
 ARCHDIR = $(LWIPDIR)/../../kos
 
 all: rm-elf $(TARGET)
 
-include $(KOS_BASE)/Makefile.rules
+include $(TOPDIR)/Makefile.rules
 
 KOS_CFLAGS += -DIPv4 \
 	-I$(LWIPDIR)/include -I$(ARCHDIR)/include \

@@ -3,7 +3,7 @@ OBJS = sinus.o
 
 all: rm-elf $(TARGET)
 
-include $(KOS_BASE)/Makefile.rules
+include $(TOPDIR)/Makefile.rules
 
 clean:
 	-rm -f $(TARGET) $(OBJS)

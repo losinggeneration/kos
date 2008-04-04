@@ -2,7 +2,7 @@ TARGET = dcload-lwip.elf
 
 OBJS = main.o
 
-LWIPDIR := $(KOS_BASE)/addons/lwip/src
+LWIPDIR := $(TOPDIR)/addons/lwip/src
 LWIPARCH := kos
 KOS_CFLAGS := $(KOS_CFLAGS) -DIPv4 -DLWIP_DEBUG \
 	-I$(LWIPDIR)/include -I$(LWIPDIR)/arch/$(LWIPARCH)/include \
@@ -10,7 +10,7 @@ KOS_CFLAGS := $(KOS_CFLAGS) -DIPv4 -DLWIP_DEBUG \
 
 all: rm-elf $(TARGET)
 
-include $(KOS_BASE)/Makefile.rules
+include $(TOPDIR)/Makefile.rules
 
 clean:
 	-rm -f $(TARGET) $(OBJS) romdisk.*

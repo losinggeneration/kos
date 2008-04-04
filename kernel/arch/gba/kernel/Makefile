@@ -18,8 +18,8 @@ OBJS = $(COPYOBJS) startup.o
 SUBDIRS = 
 
 myall: $(OBJS)
-	cp $(COPYOBJS) $(KOS_BASE)/kernel/build/
+	cp $(COPYOBJS) $(TOPDIR)/kernel/build/
 
-include $(KOS_BASE)/Makefile.prefab
+include $(TOPDIR)/Makefile.prefab
 
 

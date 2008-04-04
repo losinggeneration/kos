@@ -6,11 +6,11 @@
 # $Id: Makefile,v 1.1 2002/10/27 23:41:13 bardtx Exp $
 
 all:
-	$(KOS_MAKE) -C hello
+	$(MAKE) -C hello
 
 clean:
-	$(KOS_MAKE) -C hello clean
+	$(MAKE) -C hello clean
 		
 dist:
-	$(KOS_MAKE) -C hello dist
+	$(MAKE) -C hello dist
 

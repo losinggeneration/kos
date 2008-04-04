@@ -7,10 +7,10 @@
 
 all: rm-elf lua.elf
 
-KOS_LOCAL_CFLAGS := -I$(KOS_BASE)/addons/lua/include
+KOS_LOCAL_CFLAGS := -I$(TOPDIR)/addons/lua/include
 
 
-include $(KOS_BASE)/Makefile.rules
+include $(TOPDIR)/Makefile.rules
 
 OBJS = lua.o
 

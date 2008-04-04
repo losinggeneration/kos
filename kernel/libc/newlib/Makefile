@@ -21,4 +21,4 @@ OBJS = lock_common.o newlib_close.o newlib_env_lock.o newlib_environ.o \
 	newlib_unlink.o newlib_wait.o newlib_write.o \
 	verify_newlib.o
 
-include $(KOS_BASE)/Makefile.prefab
+include $(TOPDIR)/Makefile.prefab

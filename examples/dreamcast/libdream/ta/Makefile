@@ -1,5 +1,5 @@
 BIN = ta
 OBJS = ta.o
 
-include ../Makefile.prefab
+include $(TOPDIR)/Makefile.prefab
 

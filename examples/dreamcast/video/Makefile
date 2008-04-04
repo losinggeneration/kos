@@ -6,12 +6,12 @@
 # $Id: Makefile,v 1.1 2002/07/10 16:51:42 bardtx Exp $
 
 all:
-	$(KOS_MAKE) -C bfont
+	$(MAKE) -C bfont
 
 clean:
-	$(KOS_MAKE) -C bfont clean
+	$(MAKE) -C bfont clean
 		
 dist:
-	$(KOS_MAKE) -C bfont dist
+	$(MAKE) -C bfont dist
 
 

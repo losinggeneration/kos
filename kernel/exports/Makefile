@@ -8,12 +8,13 @@
 OBJS = nmmgr.o kernel_exports.o exports.o library.o
 SUBDIRS = 
 
-include $(KOS_BASE)/Makefile.prefab
+include $(TOPDIR)/Makefile.prefab
 
 kernel_exports.o: kernel_exports.c
 
 kernel_exports.c: ../exports.txt
-	$(KOS_BASE)/utils/genexports/genexports.sh ../exports.txt kernel_exports.c kernel_symtab
+	@$(TOPDIR)/utils/genexports/genexports.sh ../exports.txt kernel_exports.c kernel_symtab
+	$(TOPDIR)/utils/genexports/genexports.sh ../exports.txt kernel_exports.c kernel_symtab
 
 clean:
 	-rm -f kernel_exports.c $(OBJS)

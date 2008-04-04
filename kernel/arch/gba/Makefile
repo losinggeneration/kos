@@ -7,7 +7,7 @@
 	
 SUBDIRS=hardware kernel
 
-include $(KOS_BASE)/Makefile.rules
+include $(TOPDIR)/Makefile.rules
 
 all: subdirs
 clean: clean_subdirs

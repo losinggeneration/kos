@@ -7,7 +7,7 @@
 
 all: rm-elf bfont.elf
 
-include $(KOS_BASE)/Makefile.rules
+include $(TOPDIR)/Makefile.rules
 
 OBJS = bfont.o
 
