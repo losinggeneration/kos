@@ -31,8 +31,8 @@ clean:
 	for i in $(DIRS); do $(MAKE) -C $$i clean || exit -1; done
 
 distclean: clean
-	-rm -f lib/$(KOS_ARCH)/*
-	-rm -f addons/lib/$(KOS_ARCH)/*
+	-rm -f lib/$(KOS_ARCH)/*.a
+	-rm -f lib/$(KOS_ARCH)/addons/*.a
 
 pre-make:
 	install -m 755 utils/bin2o/bin2o ${KOS_PATH}/bin/bin2o
