@@ -21,6 +21,8 @@ error:
 	@echo doc/README for more info.
 	@echo
 	@echo Perhaps you need to run kos-make instead.
+	@echo Usually you should first run
+	@echo utils/gnu_wrappers/kos-make install-tools
 	@exit 0
 else
 
@@ -34,7 +36,7 @@ distclean: clean
 	-rm -f lib/$(KOS_ARCH)/*.a
 	-rm -f lib/$(KOS_ARCH)/addons/*.a
 
-pre-make:
+pre-make: install-headers install-${KOS_ARCH}-headers
 	install -m 755 utils/bin2o/bin2o ${KOS_PATH}/bin/bin2o
 
 install-tools:
@@ -63,18 +65,65 @@ ifdef KOS_CCPLUS
 	install -m 660 lib/$(KOS_ARCH)/libk++.a ${KOS_PATH}/lib/libk++.a
 endif
 
-install: install-tools install-libs
+install: all install-tools install-libs
 
-kos-ports_all:
-	$(MAKE) -C ../kos-ports all KOS_PATH=$(CURDIR)
+install-headers:
+	install -d ${KOS_PATH}/include/kos
+	install -d ${KOS_PATH}/include/kos
+	install -d ${KOS_PATH}/include/sys
+	install -d ${KOS_PATH}/include/arch
+	install -d ${KOS_PATH}/include/arpa
+	install -d ${KOS_PATH}/include/addons
+	install -d ${KOS_PATH}/include/addons/kos
+	install -d ${KOS_PATH}/include/netinet
+	install -m 660 include/*.h ${KOS_PATH}/include/
+	install -m 660 include/kos/*.h ${KOS_PATH}/include/kos/
+	install -m 660 include/arpa/*.h ${KOS_PATH}/include/arpa
+	install -m 660 include/netinet/*.h ${KOS_PATH}/include/netinet
+	install -m 660 include/sys/*.h ${KOS_PATH}/include/sys/
+	install -m 660 include/addons/kos/*.h ${KOS_PATH}/include/addons/kos
 
-kos-ports_clean:
-	$(MAKE) -C ../kos-ports clean KOS_PATH=$(CURDIR)
 
-all_auto_kos_base:
-	$(MAKE) all KOS_PATH=$(CURDIR)
+install-gba-headers:
+	install -d ${KOS_PATH}/include/arch/gba
+	install -d ${KOS_PATH}/include/arch/gba/gba
+	install -d ${KOS_PATH}/include/arch/gba/arch
+	install -m 660 include/arch/gba/gba/*.h ${KOS_PATH}/include/arch/gba/gba/
+	install -m 660 include/arch/gba/arch/*.h ${KOS_PATH}/include/arch/gba/arch/
 
-clean_auto_kos_base:
-	$(MAKE) clean KOS_PATH=$(CURDIR)
+install-ps2-headers:
+	install -d ${KOS_PATH}/include/arch/ps2
+	install -d ${KOS_PATH}/include/arch/ps2/ps2
+	install -d ${KOS_PATH}/include/arch/ps2/arch
+	install -m 660 include/arch/ps2/ps2/*.h ${KOS_PATH}/include/arch/ps2/ps2
+	install -m 660 include/arch/ps2/arch/*.h ${KOS_PATH}/include/arch/ps2/arch
+
+install-ia32-headers:
+	install -d ${KOS_PATH}/include/arch/ia32
+	install -d ${KOS_PATH}/include/arch/ia32/arch
+	install -d ${KOS_PATH}/include/arch/ia32/ia32
+	install -m 660 include/arch/ia32/arch/*.h ${KOS_PATH}/include/arch/ia32/arch
+	install -m 660 include/arch/ia32/ia32/*.h ${KOS_PATH}/include/arch/ia32/ia32
+
+install-dreamcast-headers:
+	install -d ${KOS_PATH}/include/arch/dreamcast
+	install -d ${KOS_PATH}/include/arch/dreamcast/dc
+	install -d ${KOS_PATH}/include/arch/dreamcast/dc/net
+	install -d ${KOS_PATH}/include/arch/dreamcast/dc/maple
+	install -d ${KOS_PATH}/include/arch/dreamcast/dc/modem
+	install -d ${KOS_PATH}/include/arch/dreamcast/dc/sound
+	install -d ${KOS_PATH}/include/arch/dreamcast/arch
+	install -d ${KOS_PATH}/include/arch/dreamcast/navi
+	install -m 660 include/arch/dreamcast/dc/*.h ${KOS_PATH}/include/arch/dreamcast/dc
+	install -m 660 include/arch/dreamcast/dc/net/*.h ${KOS_PATH}/include/arch/dreamcast/dc/net
+	install -m 660 include/arch/dreamcast/dc/maple/*.h ${KOS_PATH}/include/arch/dreamcast/dc/maple
+	install -m 660 include/arch/dreamcast/dc/modem/*.h ${KOS_PATH}/include/arch/dreamcast/dc/modem
+	install -m 660 include/arch/dreamcast/dc/sound/*.h ${KOS_PATH}/include/arch/dreamcast/dc/sound
+	install -m 660 include/arch/dreamcast/arch/*.h ${KOS_PATH}/include/arch/dreamcast/arch
+	install -m 660 include/arch/dreamcast/navi/*.h ${KOS_PATH}/include/arch/dreamcast/navi
+
+examples:
+	$(MAKE) -C examples/${KOS_ARCH} all
+
 endif
 
