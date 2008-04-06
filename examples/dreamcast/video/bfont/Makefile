@@ -7,7 +7,7 @@
 
 all: rm-elf bfont.elf
 
-include $(TOPDIR)/Makefile.rules
+include ../../../../Makefile.rules
 
 OBJS = bfont.o
 

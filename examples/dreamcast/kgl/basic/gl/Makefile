@@ -8,7 +8,7 @@ OBJS = gltest.o
 
 all: rm-elf $(TARGET)
 
-include $(TOPDIR)/Makefile.rules
+include $(KOS_PATH)/scripts/Makefile.rules
 
 clean:
 	-rm -f $(TARGET) $(OBJS) romdisk.*
@@ -24,7 +24,7 @@ romdisk.img:
 	$(KOS_GENROMFS) -f romdisk.img -d romdisk -v
 
 romdisk.o: romdisk.img
-	$(TOPDIR)/utils/bin2o/bin2o romdisk.img romdisk romdisk.o
+	$(KOS_PATH)/bin/bin2o romdisk.img romdisk romdisk.o
 
 run: $(TARGET)
 	$(KOS_LOADER) $(TARGET)

@@ -18,7 +18,7 @@ KOS_ROMDISK_DIR = romdisk
 # re-creation of the rom disk.
 all: rm-elf $(TARGET)
 
-include $(TOPDIR)/Makefile.rules
+include $(KOS_PATH)/scripts/Makefile.rules
 
 clean:
 	-rm -f $(TARGET) $(OBJS) romdisk.*

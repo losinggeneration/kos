@@ -8,7 +8,7 @@ OBJS = nehe26.o
 
 all: rm-elf $(TARGET)
 
-include $(TOPDIR)/Makefile.rules
+include $(KOS_PATH)/scripts/Makefile.rules
 
 clean:
 	-rm -f $(TARGET) $(OBJS) romdisk.*
@@ -18,7 +18,7 @@ rm-elf:
 
 $(TARGET): $(OBJS) romdisk.o
 	$(KOS_CC) $(KOS_CFLAGS) $(KOS_LDFLAGS) -o $(TARGET) $(KOS_START) \
-		$(OBJS) romdisk.o $(OBJEXTRA) -L$(KOS_PATH)/lib  -lgl $(KOS_LIBS)
+		$(OBJS) romdisk.o $(OBJEXTRA) -L$(KOS_PATH)/lib/addons  -lgl $(KOS_LIBS)
 
 romdisk.img:
 	$(KOS_GENROMFS) -f romdisk.img -d romdisk -v

@@ -8,7 +8,7 @@ OBJS = genmenu.o
 
 all: rm-elf $(TARGET)
 
-include $(TOPDIR)/Makefile.rules
+include ../../../../Makefile.rules
 
 clean:
 	-rm -f $(TARGET) $(OBJS) romdisk.*

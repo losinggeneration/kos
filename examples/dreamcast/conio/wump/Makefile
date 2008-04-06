@@ -7,7 +7,7 @@
 
 all: rm-elf wump.elf
 
-include $(TOPDIR)/Makefile.rules
+include ../../../../Makefile.rules
 
 OBJS = wump.o
 

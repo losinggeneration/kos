@@ -1,10 +1,10 @@
 all: rm-elf example.elf
 
-include $(TOPDIR)/Makefile.rules
+include $(KOS_PATH)/scripts/Makefile.rules
 
 OBJS = example.o wfont.o
 
-KOS_LOCAL_CFLAGS = -I$(TOPDIR)/addons/zlib
+KOS_LOCAL_CFLAGS = -I$(KOS_PATH)/include/addons/zlib
 	
 clean:
 	-rm -f example.elf $(OBJS)
@@ -23,13 +23,13 @@ example.elf: $(OBJS) romdisk_boot.o
 	$(KOS_CC) $(KOS_CFLAGS) $(KOS_LDFLAGS) -o $@ $(KOS_START) $^ -lpng -lz -lm $(KOS_LIBS)
 
 wfont.o: wfont.bin
-	$(TOPDIR)/utils/bin2o/bin2o $< wfont $@
+	$(KOS_PATH)/bin/bin2o $< wfont $@
 
 romdisk_boot.img:
 	$(KOS_GENROMFS) -f $@ -d romdisk_boot -v
 
 romdisk_boot.o: romdisk_boot.img
-	$(TOPDIR)/utils/bin2o/bin2o $< romdisk_boot $@
+	$(KOS_PATH)/bin/bin2o $< romdisk_boot $@
 
 run: example.elf
 	$(KOS_LOADER) $<

@@ -7,7 +7,7 @@
 
 all: rm-elf adventure.elf
 
-include $(TOPDIR)/Makefile.rules
+include ../../../../Makefile.rules
 
 OBJS = porthelper.o crc.o done.o init.o io.o main.o save.o subr.o vocab.o wizard.o data.o
 

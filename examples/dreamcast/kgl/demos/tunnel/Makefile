@@ -8,9 +8,11 @@
 TARGET = tunnel.elf
 OBJS = tunnel.o plprint.o menu.o tunneldat.o
 
+KOS_ROMDISK_DIR=romdisk
+
 all: rm-elf $(TARGET)
 
-include $(TOPDIR)/Makefile.rules
+include $(KOS_PATH)/scripts/Makefile.rules
 
 clean:
 	-rm -f $(TARGET) $(BIN) $(OBJS) romdisk.*
@@ -19,15 +21,7 @@ rm-elf:
 	-rm -f $(TARGET) $(BIN) romdisk.*
 
 $(TARGET): $(OBJS) romdisk.o
-	$(KOS_CC) $(KOS_CFLAGS) $(KOS_LDFLAGS) -o $(TARGET) $(KOS_START) \
-	$(OBJS) romdisk.o $(OBJEXTRA) -L$(TOPDIR)/lib -ldcplib -lk++ -lgl -lpcx -lkosutils -lm $(KOS_LIBS)
-
-
-romdisk.img:
-	$(KOS_GENROMFS) -f romdisk.img -d romdisk -v
-
-romdisk.o: romdisk.img
-	$(TOPDIR)/utils/bin2o/bin2o romdisk.img romdisk romdisk.o
+	kos-c++ -o $(TARGET) $(OBJS) romdisk.o $(OBJEXTRA) -ldcplib -lk++ -lgl -lpcx -lkosutils -lm
 
 run: $(TARGET)
 	$(KOS_LOADER) $(TARGET)

@@ -7,7 +7,7 @@
 
 all: rm-elf basic.elf
 
-include $(TOPDIR)/Makefile.rules
+include ../../../../Makefile.rules
 
 OBJS = basic.o
 

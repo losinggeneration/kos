@@ -4,7 +4,7 @@ OBJS = vq-example.o fruit.o
 
 all: rm-elf $(TARGET)
 
-include $(TOPDIR)/Makefile.rules
+include $(KOS_PATH)/scripts/Makefile.rules
 
 clean:
 	-rm -f $(TARGET) $(OBJS) fruit.vq
@@ -17,10 +17,10 @@ $(TARGET): $(OBJS)
 		$(OBJS) $(OBJEXTRA) -L$(TOPDIR)/lib -lgl $(KOS_LIBS) -lm
 
 fruit.o: fruit.vq
-	$(TOPDIR)/utils/bin2o/bin2o fruit.vq fruit fruit.o
+	$(KOS_PATH)/bin/bin2o fruit.vq fruit fruit.o
 
 fruit.vq: fruit.jpg
-	$(TOPDIR)/utils/vqenc/vqenc -t -v fruit.jpg
+	$(KOS_PATH)/bin/vqenc -t -v fruit.jpg
 
 run: $(TARGET)
 	$(KOS_LOADER) $(TARGET)

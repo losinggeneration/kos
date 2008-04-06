@@ -11,7 +11,7 @@ OBJS = ta.o
 
 all: rm-elf $(TARGET)
 
-include $(TOPDIR)/Makefile.rules
+include ../../../../Makefile.rules
 
 clean:
 	-rm -f $(TARGET_ELF) $(TARGET) $(OBJS)
