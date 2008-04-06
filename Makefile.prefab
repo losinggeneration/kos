@@ -20,6 +20,6 @@ defaultall: $(OBJS) subdirs
 clean: clean_subdirs
 	-rm -f $(OBJS) *.bck
 
-include $(TOPDIR)/Makefile.rules
+include $(KOS_PATH)/scripts/Makefile.rules
 
 
