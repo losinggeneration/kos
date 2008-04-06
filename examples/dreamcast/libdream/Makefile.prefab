@@ -7,7 +7,7 @@ TARGET = $(BIN).elf
 
 all: $(TARGET)
 
-include $(TOPDIR)/Makefile.rules
+include $(KOS_PATH)/scripts/Makefile.rules
 
 clean:
 	rm -f $(TARGET) $(OBJS) $(EXTRA_CLEAN)
@@ -16,9 +16,7 @@ rm-elf:
 	rm -f $(TARGET)
 
 $(TARGET): $(OBJS)
-	$(KOS_CC) $(KOS_CFLAGS) $(KOS_LDFLAGS) -o $(TARGET) $(KOS_START) \
-		$(OBJS) $(DATAOBJS) $(OBJEXTRA) \
-		$(EXTRA_LIBS) $(KOS_LIBS)
+	kos-cc -o $(TARGET) $(OBJS) $(DATAOBJS) $(OBJEXTRA) $(EXTRA_LIBS)
 
 run: $(TARGET)
 	$(KOS_LOADER) $(TARGET)
