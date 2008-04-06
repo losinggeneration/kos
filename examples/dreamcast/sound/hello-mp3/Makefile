@@ -4,7 +4,7 @@ OBJS = romdisk.o mp3test.o
 
 all: clean $(TARGET)
 
-include $(TOPDIR)/Makefile.rules
+include ../../../../Makefile.rules
 
 clean:
 	-rm -f $(TARGET) $(OBJS)
@@ -17,7 +17,7 @@ romdisk.img:
 	$(KOS_GENROMFS) -f romdisk.img -d romdisk -v
 
 romdisk.o: romdisk.img
-	$(KOS_PATH)/bi/bin2o romdisk.img romdisk romdisk.o
+	$(KOS_PATH)/bin/bin2o romdisk.img romdisk romdisk.o
 
 run: 
 	$(KOS_LOADER) $(TARGET)

@@ -9,7 +9,7 @@ KOS_ROMDISK_DIR = romdisk
 
 all: rm-elf $(TARGET)
 
-include $(TOPDIR)/Makefile.rules
+include ../../../../Makefile.rules
 
 clean:
 	-rm -f $(TARGET) $(OBJS)
