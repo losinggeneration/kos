@@ -15,7 +15,7 @@ all:
 
 clean:
 	for i in $(DIRS); do $(MAKE) -C $$i clean || exit -1; done
-		
+
 dist:
 	for i in $(DIRS); do $(MAKE) -C $$i dist || exit -1; done
 

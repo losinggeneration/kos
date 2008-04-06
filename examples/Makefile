@@ -10,5 +10,4 @@ all:
 
 clean:
 	$(MAKE) -C $(KOS_ARCH) clean
-		
 
