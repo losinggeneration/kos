@@ -53,6 +53,9 @@ install-tools:
 	install -m 755 utils/gnu_wrappers/kos-objcopy ${KOS_PATH}/bin/kos-objcopy
 	install -m 755 utils/gnu_wrappers/kos-ranlib ${KOS_PATH}/bin/kos-ranlib
 	install -m 755 utils/gnu_wrappers/kos-strip ${KOS_PATH}/bin/kos-strip
+	@echo Installing Makefile.rules
+	install -d ${KOS_PATH}/scripts
+	install -m 660 Makefile.rules ${KOS_PATH}/scripts/Makefile.rules
 
 install-libs:
 	@echo Installing libraries
