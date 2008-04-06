@@ -11,7 +11,7 @@ OBJS = basic.o
 
 all: rm-elf $(TARGET)
 
-include $(TOPDIR)/Makefile.rules
+include ../../../../Makefile.rules
 
 clean:
 	-rm -f $(TARGET) $(OBJS)
@@ -20,8 +20,7 @@ rm-elf:
 	-rm -f $(TARGET)
 
 $(TARGET): $(OBJS)
-	$(KOS_CC) $(KOS_CFLAGS) $(KOS_LDFLAGS) -o $(TARGET) $(KOS_START) \
-		$(OBJS) $(OBJEXTRA) $(KOS_LIBS)
+	kos-cc -o $(TARGET) $(OBJS) $(OBJEXTRA)
 
 run: $(TARGET)
 	$(KOS_LOADER) $(TARGET) -n

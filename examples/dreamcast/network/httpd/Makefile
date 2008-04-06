@@ -9,16 +9,16 @@ TARGET = httpd.elf
 # List all of your C files here, but change the extension to ".o"
 OBJS = simhost.o httpd.o romdisk.o
 
-LWIPDIR = $(TOPDIR)/../kos-ports/lwip/lwip/src
-ARCHDIR = $(LWIPDIR)/../../kos
-
-KOS_CFLAGS += -DIPv4 \
-	-I$(LWIPDIR)/include -I$(ARCHDIR)/include \
-	-I$(LWIPDIR)/include/ipv4
-
 all: rm-elf $(TARGET)
 
-include $(TOPDIR)/Makefile.rules
+include $(KOS_PATH)/scripts/Makefile.rules
+
+LWIPDIR = $(KOS_PATH)/include/addons/lwip
+ARCHDIR = $(LWIPDIR)/kos
+
+CFLAGS += -DIPv4 \
+	-I$(LWIPDIR) -I$(ARCHDIR) \
+	-I$(LWIPDIR)/ipv4
 
 clean:
 	rm -f $(TARGET) $(OBJS) romdisk.img
@@ -27,14 +27,13 @@ rm-elf:
 	rm -f $(TARGET) romdisk.*
 
 $(TARGET): $(OBJS)
-	$(KOS_CC) $(KOS_CFLAGS) $(KOS_LDFLAGS) -o $(TARGET) $(KOS_START) \
-		$(OBJS) $(OBJEXTRA) -llwip4 -lkosutils $(KOS_LIBS)
+	kos-cc -o $(TARGET) $(OBJS) $(OBJEXTRA) -llwip4 -lkosutils
 
 romdisk.img:
 	$(KOS_GENROMFS) -f romdisk.img -d romdisk -v
 
 romdisk.o: romdisk.img
-	$(TOPDIR)/utils/bin2o/bin2o romdisk.img romdisk romdisk.o
+	$(KOS_PATH)/bin/bin2o romdisk.img romdisk romdisk.o
 
 run: $(TARGET)
 	dc-tool -n -x $(TARGET)

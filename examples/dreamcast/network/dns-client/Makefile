@@ -4,16 +4,16 @@ TARGET = dns-client.elf
 # List all of your C files here, but change the extension to ".o"
 OBJS = dnslookup.o
 
-LWIPDIR = $(TOPDIR)/../kos-ports/lwip/lwip/src
-ARCHDIR = $(LWIPDIR)/../../kos
+LWIPDIR = $(KOS_PATH)/include/addons/lwip
+ARCHDIR = $(LWIPDIR)/kos
 
 all: rm-elf $(TARGET)
 
-include $(TOPDIR)/Makefile.rules
+include ../../../../Makefile.rules
 
-KOS_CFLAGS += -DIPv4 \
-	-I$(LWIPDIR)/include -I$(ARCHDIR)/include \
-	-I$(LWIPDIR)/include/ipv4
+CFLAGS += -DIPv4 \
+	-I$(LWIPDIR) -I$(ARCHDIR) \
+	-I$(LWIPDIR)/ipv4
 
 clean:
 	rm -f $(TARGET) $(OBJS)
@@ -22,8 +22,7 @@ rm-elf:
 	rm -f $(TARGET)
 
 $(TARGET): $(OBJS)
-	$(KOS_CC) $(KOS_CFLAGS) $(KOS_LDFLAGS) -o $(TARGET) $(KOS_START) \
-		$(OBJS) $(OBJEXTRA) -llwip4 -lkosutils $(KOS_LIBS)
+	kos-cc -o $(TARGET) $(OBJS) $(OBJEXTRA) -llwip4 -lkosutils
 
 run: $(TARGET)
 	dc-tool -n -x $(TARGET)
