@@ -14,7 +14,7 @@ export KOS_INC_PATHS="${KOS_INC_PATHS} -I${KOS_PATH}/include \
 #export KOS_INC_PATHS_CPP="${KOS_INC_PATHS_CPP} -I${KOS_BASE}/libk++/stlport"
 
 # "System" libraries
-export KOS_LIB_PATHS="-L${KOS_BASE}/lib/${KOS_ARCH} -L${KOS_BASE}/addons/lib/${KOS_ARCH}"
+export KOS_LIB_PATHS="-L${KOS_PATH}/lib -L${KOS_PATH}/lib/addons"
 export KOS_LIBS="-Wl,--start-group -lkallisti -lc -lgcc -Wl,--end-group"
 
 # Main arch compiler paths
@@ -32,5 +32,5 @@ export KOS_CPPFLAGS="${KOS_CPPFLAGS} ${KOS_INC_PATHS_CPP} -fno-operator-names -f
 export KOS_LDFLAGS="${KOS_LDFLAGS} -nostartfiles -nostdlib ${KOS_LIB_PATHS}"
 
 # Some extra vars based on architecture
-export KOS_ARCH_DIR="${KOS_PATH}/lib/arch/${KOS_ARCH}"
+export KOS_ARCH_DIR="${KOS_PATH}/lib"
 export KOS_START="${KOS_ARCH_DIR}/startup.o"
