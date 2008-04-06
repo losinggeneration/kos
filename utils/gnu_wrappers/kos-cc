@@ -1,6 +1,11 @@
 #!/bin/sh
+if [ ! "$KOS_CPP" ]; then
 source environ.sh
+fi
 
+# so it can be called easily
+main()
+{
 # Make sure what mode we're in. The basic cc wrapper does a lot.
 ARGS=$*
 USEMODE=0
@@ -51,3 +56,8 @@ case $USEMODE in
 		exec ${KOS_CC} ${KOS_CFLAGS} "$@"
 	;;
 esac
+}
+
+if [ ! "$KOS_CPP" ]; then
+	main "$@"
+fi

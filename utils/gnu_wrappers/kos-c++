@@ -1,5 +1,7 @@
 #!/bin/sh
 source environ.sh
+export KOS_CPP=1
+source kos-cc
 
 # This actually does require bash...
 
@@ -9,4 +11,5 @@ export KOS_CC="${KOS_CCPLUS}"
 export KOS_CFLAGS="${KOS_CFLAGS} ${KOS_CPPFLAGS}"
 export KOS_LIBS="-lstdc++ ${KOS_LIBS}"
 
-exec ${0%%kos-c++}kos-cc "$@"
+#exec ${0%%kos-c++}kos-cc "$@"
+main "$@"
