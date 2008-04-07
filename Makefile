@@ -36,7 +36,7 @@ distclean: clean
 	-rm -f lib/$(KOS_ARCH)/*.a
 	-rm -f lib/$(KOS_ARCH)/addons/*.a
 
-pre-make: install-headers install-${KOS_ARCH}-headers
+pre-make: install-headers
 	install -m 755 utils/bin2o/bin2o ${KOS_PATH}/bin/bin2o
 
 install-tools:
@@ -70,7 +70,9 @@ endif
 
 install: all install-tools install-libs
 
-install-headers:
+install-headers: install-standard-headers install-${KOS_ARCH}-headers
+
+install-standard-headers:
 	install -d ${KOS_PATH}/include/kos
 	install -d ${KOS_PATH}/include/kos
 	install -d ${KOS_PATH}/include/sys
@@ -85,7 +87,6 @@ install-headers:
 	install -m 660 include/netinet/*.h ${KOS_PATH}/include/netinet
 	install -m 660 include/sys/*.h ${KOS_PATH}/include/sys/
 	install -m 660 include/addons/kos/*.h ${KOS_PATH}/include/addons/kos
-
 
 install-gba-headers:
 	install -d ${KOS_PATH}/include/arch/gba
