@@ -81,12 +81,14 @@ install-standard-headers:
 	install -d ${KOS_PATH}/include/addons
 	install -d ${KOS_PATH}/include/addons/kos
 	install -d ${KOS_PATH}/include/netinet
+	install -d ${KOS_PATH}/include/machine
 	install -m 660 include/*.h ${KOS_PATH}/include/
 	install -m 660 include/kos/*.h ${KOS_PATH}/include/kos/
 	install -m 660 include/arpa/*.h ${KOS_PATH}/include/arpa
 	install -m 660 include/netinet/*.h ${KOS_PATH}/include/netinet
 	install -m 660 include/sys/*.h ${KOS_PATH}/include/sys/
 	install -m 660 include/addons/kos/*.h ${KOS_PATH}/include/addons/kos
+	install -m 660 include/machine/*.h ${KOS_PATH}/include/machine
 
 install-gba-headers:
 	install -d ${KOS_PATH}/include/arch/gba
