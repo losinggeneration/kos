@@ -7,9 +7,13 @@
 # Add the gnu wrappers dir to the path
 #export PATH="${PATH}:${KOS_BASE}/utils/gnu_wrappers"
 
+# Base include path
+export KOS_INC_BASE="${KOS_PATH}/include"
+export KOS_INC_ADDONS="${KOS_PATH}/include/addons"
+
 # Our includes
-export KOS_INC_PATHS="${KOS_INC_PATHS} -I${KOS_PATH}/include \
--I${KOS_PATH}/include/arch/${KOS_ARCH} -I${KOS_PATH}/include/addons"
+export KOS_INC_PATHS="${KOS_INC_PATHS} -I${KOS_INC_BASE} \
+-I${KOS_PATH}/include/arch/${KOS_ARCH} -I${KOS_INC_ADDONS}"
 
 #export KOS_INC_PATHS_CPP="${KOS_INC_PATHS_CPP} -I${KOS_BASE}/libk++/stlport"
 
