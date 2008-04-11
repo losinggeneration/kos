@@ -9,5 +9,5 @@ OBJS = fs.o fs_romdisk.o fs_ramdisk.o fs_pty.o
 OBJS += fs_utils.o elf.o fs_socket.o
 SUBDIRS = 
 
-include $(TOPDIR)/Makefile.prefab
+include ../../Makefile.prefab
 

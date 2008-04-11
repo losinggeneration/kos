@@ -25,7 +25,7 @@ OBJS += sq.o scif.o
 
 SUBDIRS = pvr network maple modem
 
-include $(TOPDIR)/Makefile.prefab
+include ../../../../Makefile.prefab
 
 
 

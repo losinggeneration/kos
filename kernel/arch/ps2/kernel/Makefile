@@ -18,10 +18,10 @@ OBJS = $(COPYOBJS)
 SUBDIRS = 
 
 myall: $(OBJS)
-	-cp $(COPYOBJS) $(TOPDIR)/kernel/build/
+	-cp $(COPYOBJS) ../../../../kernel/build/
 	-rm banner.c banner.o
 
-include $(TOPDIR)/Makefile.prefab
+include ../../../../Makefile.prefab
 
 banner.o: banner.c
 

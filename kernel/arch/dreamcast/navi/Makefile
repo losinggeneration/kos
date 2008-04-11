@@ -14,7 +14,7 @@ OBJS += navi_flash.o
 # SUBDIRS = fs
 SUBDIRS =
 
-include $(TOPDIR)/Makefile.prefab
+include ../../../../Makefile.prefab
 
 
 

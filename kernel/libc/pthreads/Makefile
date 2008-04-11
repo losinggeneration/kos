@@ -10,4 +10,4 @@
 OBJS = pthread_mutex.o pthread_cond.o pthread_thd_attr.o pthread_thd.o \
 	pthread_tls.o
 
-include $(TOPDIR)/Makefile.prefab
+include ../../../Makefile.prefab

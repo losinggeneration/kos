@@ -15,5 +15,5 @@ OBJS = malloc.o cplusplus.o
 
 SUBDIRS =
 
-include $(TOPDIR)/Makefile.prefab
+include ../../Makefile.prefab
 

@@ -8,5 +8,5 @@
 OBJS = fs_ps2load.o
 SUBDIRS = 
 
-include $(TOPDIR)/Makefile.prefab
+include ../../../../Makefile.prefab
 

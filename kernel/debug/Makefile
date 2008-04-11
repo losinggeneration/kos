@@ -8,5 +8,5 @@
 OBJS = dbgio.o
 SUBDIRS = 
 
-include $(TOPDIR)/Makefile.prefab
+include ../../Makefile.prefab
 

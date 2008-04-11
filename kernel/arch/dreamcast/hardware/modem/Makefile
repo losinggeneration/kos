@@ -9,5 +9,5 @@ OBJS = mdata.o mintr.o modem.o chainbuf.o
 
 SUBDIRS =
 
-include $(TOPDIR)/Makefile.prefab
+include ../../../../../Makefile.prefab
 
