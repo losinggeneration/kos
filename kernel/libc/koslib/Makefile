@@ -14,4 +14,4 @@ OBJS = abort.o byteorder.o memset2.o memset4.o memcpy2.o memcpy4.o \
 	creat.o sleep.o rmdir.o rename.o inet_pton.o inet_ntop.o \
 	inet_ntoa.o inet_aton.o
 
-include $(TOPDIR)/Makefile.prefab
+include ../../../Makefile.prefab

@@ -8,13 +8,13 @@
 OBJS = nmmgr.o kernel_exports.o exports.o library.o
 SUBDIRS = 
 
-include $(TOPDIR)/Makefile.prefab
+include ../../Makefile.prefab
 
 kernel_exports.o: kernel_exports.c
 
 kernel_exports.c: ../exports.txt
-	@$(TOPDIR)/utils/genexports/genexports.sh ../exports.txt kernel_exports.c kernel_symtab
-	$(TOPDIR)/utils/genexports/genexports.sh ../exports.txt kernel_exports.c kernel_symtab
+	@../..//utils/genexports/genexports.sh ../exports.txt kernel_exports.c kernel_symtab
+	../../utils/genexports/genexports.sh ../exports.txt kernel_exports.c kernel_symtab
 
 clean:
 	-rm -f kernel_exports.c $(OBJS)

@@ -9,5 +9,5 @@ SUBDIRS = koslib newlib pthreads
 all: subdirs
 clean: clean_subdirs
 
-include $(TOPDIR)/Makefile.prefab
+include ../../Makefile.prefab
 

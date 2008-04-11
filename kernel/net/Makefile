@@ -8,7 +8,7 @@
 OBJS =  net_core.o net_arp.o net_input.o net_icmp.o net_ipv4.o net_udp.o
 SUBDIRS = 
 
-include $(TOPDIR)/Makefile.prefab
+include ../../Makefile.prefab
 
 
 

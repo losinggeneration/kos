@@ -9,7 +9,7 @@ OBJS =  sem.o cond.o mutex.o genwait.o
 OBJS += thread.o
 SUBDIRS = 
 
-include $(TOPDIR)/Makefile.prefab
+include ../../Makefile.prefab
 
 
 

@@ -26,6 +26,6 @@ OBJS += pvr_prim.o pvr_scene.o
 # Texture handling
 OBJS += pvr_texture.o pvr_dma.o
 
-include $(TOPDIR)/Makefile.prefab
+include ../../../../../Makefile.prefab
 
 

@@ -13,6 +13,6 @@ myall: $(OBJS)
 	rm -f $(TOPDIR)/lib/$(KOS_ARCH)/libk++.a
 	$(KOS_AR) rcs $(TOPDIR)/lib/$(KOS_ARCH)/libk++.a $(OBJS)
 
-include $(TOPDIR)/Makefile.prefab
+include ../Makefile.prefab
 
 

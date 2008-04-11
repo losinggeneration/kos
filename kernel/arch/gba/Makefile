@@ -7,7 +7,7 @@
 	
 SUBDIRS=hardware kernel
 
-include $(TOPDIR)/Makefile.rules
+include ../../../Makefile.rules
 
 all: subdirs
 clean: clean_subdirs

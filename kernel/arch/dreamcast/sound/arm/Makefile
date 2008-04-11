@@ -1,7 +1,7 @@
 all: stream.drv
 
 aica_fw.h: stream.drv
-	$(TOPDIR)/utils/bin2c/bin2c stream.drv aica_fw.h.tmp
+	$(KOS_PATH)/utils/bin2c/bin2c stream.drv aica_fw.h.tmp
 	echo 'unsigned char aica_fw[] = {' > aica_fw.h
 	cat aica_fw.h.tmp >> aica_fw.h
 	echo '};' >> aica_fw.h
