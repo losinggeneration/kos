@@ -11,7 +11,7 @@ OBJS = hello.o
 
 all: rm-elf $(TARGET)
 
-include $(TOPDIR)/Makefile.rules
+include $(KOS_PATH)/scripts/Makefile.rules
 
 clean:
 	-rm -f $(TARGET) $(OBJS) romdisk.*
@@ -25,15 +25,14 @@ KOS_START=
 # lines. Also change the -l arguments to include everything you need,
 # such as -lmp3, etc.. these will need to go _before_ $(KOS_LIBS)
 $(TARGET): $(OBJS) romdisk.o
-	$(KOS_CC) $(KOS_CFLAGS) $(KOS_LDFLAGS) -o $(TARGET) $(KOS_START) \
-		$(OBJS) $(OBJEXTRA) $(KOS_LIBS)
+	kos-cc -o $(TARGET) $(OBJS) $(OBJEXTRA)
 
 # You can safely remove the next two targets if you don't use a ROMDISK
 romdisk.img:
 	$(KOS_GENROMFS) -f romdisk.img -d romdisk -v
 
 romdisk.o: romdisk.img
-	$(TOPDIR)/utils/bin2o/bin2o romdisk.img romdisk romdisk.o
+	$(KOS_PATH)/bin/bin2o romdisk.img romdisk romdisk.o
 
 run: $(TARGET)
 	$(KOS_LOADER) $(TARGET)

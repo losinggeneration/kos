@@ -7,7 +7,7 @@
 
 all: pogo-keen.gba
 
-include $(TOPDIR)/Makefile.rules
+include $(KOS_PATH)/scripts/Makefile.rules
 
 OBJS = pogo.o
 
@@ -19,15 +19,14 @@ clean:
 	-rm -f romdisk_boot.img
 
 pogo-keen.gba: pogo-keen.elf
-	$(TOPDIR)/utils/gba-elf2bin/gba-elf2bin pogo-keen.elf pogo-keen.gba
+	../../../utils/gba-elf2bin/gba-elf2bin pogo-keen.elf pogo-keen.gba
 	-rm -f pogo-keen.elf
 
 DATAOBJS = romdisk_boot.o
 pogo-keen.elf: $(OBJS) $(DATAOBJS)
-	$(KOS_CC) $(KOS_CFLAGS) $(KOS_LDFLAGS) -o pogo-keen.elf \
-		$(KOS_START) $(OBJS) $(DATAOBJS) $(OBJEXTRA) -L$(TOPDIR)/lib -lkallisti -lgcc
+	kos-cc -o pogo-keen.elf $(OBJS) $(DATAOBJS) $(OBJEXTRA) -lkallisti -lgcc
 
 romdisk_boot.o:
 	$(KOS_GENROMFS) -f romdisk_boot.img -d romdisk_boot -v
-	$(TOPDIR)/utils/bin2o/bin2o romdisk_boot.img romdisk_boot romdisk_boot.o
+	$(KOS_PATH)/bin/bin2o romdisk_boot.img romdisk_boot romdisk_boot.o
 
