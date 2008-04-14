@@ -22,15 +22,15 @@
 # User configuration
 sh_target=sh-elf
 arm_target=arm-elf
-sh_prefix  := /usr/local/dc/$(sh_target)
-arm_prefix := /usr/local/dc/$(arm_target)
+sh_prefix  := /opt/toolchains/dc/$(sh_target)
+arm_prefix := /opt/toolchains/dc/$(arm_target)
 # kos_root: KOS subversion root (contains kos/ and kos-ports/)
 kos_root=$(CURDIR)/../../..
 # kos_base: equivalent of KOS_BASE (contains include/ and kernel/)
 kos_base=$(kos_root)/kos
 binutils_ver=2.17
 gcc_ver=3.4.6
-newlib_ver=1.12.0
+newlib_ver=1.15.0
 gdb_ver=6.7.1
 insight_ver=6.7.1
 thread_model=posix
