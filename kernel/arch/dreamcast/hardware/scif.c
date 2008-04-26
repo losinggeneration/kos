@@ -27,7 +27,7 @@ kernel or for debugging it.
 /* SCIF registers */
 #define SCIFREG08(x) *((volatile uint8 *)(x))
 #define SCIFREG16(x) *((volatile uint16 *)(x))
-#define SCSMR2	SCIFREG16(0xffeb0000)
+#define SCSMR2	SCIFREG16(0xffe80000)
 #define SCBRR2	SCIFREG08(0xffe80004)
 #define SCSCR2	SCIFREG16(0xffe80008)
 #define SCFTDR2	SCIFREG08(0xffe8000C)
@@ -189,6 +189,9 @@ int scif_init_fake() {
 /* recv trigger to 1 byte */
 int scif_init() {
 	int i;
+	unsigned char scbrr2;
+	unsigned short scsmr2;
+
 	/* int fifo = 1; */
 
 	/*	If dcload-serial is active, then do nothing here, or we'll 
@@ -201,17 +204,33 @@ int scif_init() {
 
 	/* Enter reset mode */
 	SCFCR2 = 0x06;
-	
-	/* 8N1, use P0 clock */
-	SCSMR2 = 0;
-	
-	/* If baudrate unset, set baudrate, N = P0/(32*B)-1 */
+
+	if (serial_baud > 9600) {
+		scsmr2 = 0;
+		scbrr2 = (50000000 / (32 * serial_baud)) - 1;
+	}
+	else if (serial_baud > 4800) {
+		scsmr2 = 1;
+		scbrr2 = (50000000 / (128 * serial_baud)) - 1;
+	}
+	else if (serial_baud > 600) {
+		scsmr2 = 2;
+		scbrr2 = (50000000 / (512 * serial_baud)) - 1;
+	}
+	else {
+		scsmr2 = 3;
+		scbrr2 = (50000000 / (2048 * serial_baud)) - 1;
+	}
+
+	/* 8N1, clock as set above (scsmr2) */
+	SCSMR2 = scsmr2;
+
+	/* Set baudrate, N = P0/(32*B)-1 */
 	/* B = P0/32*(N+1) */
-	if (SCBRR2 == 0xff)
-		SCBRR2 = (50000000 / (32 * serial_baud)) - 1;
+	SCBRR2 = scbrr2;
 
 	/* Wait a bit for it to stabilize */
-	for (i=0; i<10000; i++)
+	for (i=0; i<800000; i++)
 		asm("nop");
 
 	/* Unreset, enable hardware flow control, triggers on 8 bytes */
@@ -230,7 +249,7 @@ int scif_init() {
 	SCSCR2 = 0x30;
 
 	/* Wait a bit for it to stabilize */
-	for (i=0; i<10000; i++)
+	for (i=0; i<800000; i++)
 		asm("nop");
 
 	return 0;
@@ -275,7 +294,7 @@ int scif_read() {
 
 /* Write one char to the serial port (call serial_flush()!) */
 int scif_write(int c) {
-	int timeout = 100000;
+	int timeout = 800000;
 
 	if (!serial_enabled) {
 		errno = EIO;
@@ -303,7 +322,7 @@ int scif_write(int c) {
 
 /* Flush all FIFO'd bytes out of the serial port buffer */
 int scif_flush() {
-	int timeout = 100000;
+	int timeout = 800000;
 
 	if (!serial_enabled) {
 		errno = EIO;
