@@ -73,7 +73,7 @@ static int is_in_network(const uint8 src[4], const uint8 dest[4],
     return 1;
 }
 
-/* Send a packet on the specified network adaptor */
+/* Send a packet on the specified network adapter */
 int net_ipv4_send_packet(netif_t *net, ip_hdr_t *hdr, const uint8 *data,
                          int size) {
     uint8 dest_ip[4];
@@ -89,26 +89,12 @@ int net_ipv4_send_packet(netif_t *net, ip_hdr_t *hdr, const uint8 *data,
 
     /* Is this the loopback address (127.0.0.1)? */
     if(ntohl(hdr->dest) == 0x7F000001) {
-        /* Fill in the ethernet header */
-        ehdr = (eth_hdr_t *)pkt;
-        memset(ehdr->dest, 0, 6);
-        memset(ehdr->src, 0, 6);
-
-        ehdr->dest[0] = 0xCF;
-        ehdr->src[0] = 0xCF;
-
-        ehdr->type[0] = 0x08;
-        ehdr->type[1] = 0x00;
-
-        /* Put the IP header / data into our ethernet packet */
-        memcpy(pkt + sizeof(eth_hdr_t), hdr,
-               4 * (hdr->version_ihl & 0x0f));
-        memcpy(pkt + sizeof(eth_hdr_t) + 4 * (hdr->version_ihl & 0x0f),
-               data, size);
+        /* Put the IP header / data into our packet */
+        memcpy(pkt, hdr, 4 * (hdr->version_ihl & 0x0f));
+        memcpy(pkt + 4 * (hdr->version_ihl & 0x0f), data, size);
         
-        /* Send it away */
-        net_input(NULL, pkt, sizeof(eth_hdr_t) + sizeof(ip_hdr_t) +
-                             size);
+        /* Send it "away" */
+        net_ipv4_input(NULL, pkt, 4 * (hdr->version_ihl & 0x0f) + size);
 
         return 0;
     }

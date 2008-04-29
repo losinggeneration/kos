@@ -7,7 +7,6 @@
 
 #include <stdio.h>
 #include <kos/net.h>
-#include <arpa/inet.h>
 #include "net_ipv4.h"
 
 CVSID("$Id: net_input.c,v 1.2 2002/03/24 00:27:05 bardtx Exp $");
@@ -19,17 +18,19 @@ CVSID("$Id: net_input.c,v 1.2 2002/03/24 00:27:05 bardtx Exp $");
 */
 
 static int net_default_input(netif_t *nif, const uint8 *data, int len) {
-	uint16 *proto = (uint16 *)(data + 12);
+	uint16 proto = (uint16)((data[12] << 8) | (data[13]));
 
-	switch(ntohs(*proto)) {
+	switch(proto) {
 		case 0x0800:
 			return net_ipv4_input(nif, data + sizeof(eth_hdr_t),
                                   len - sizeof(eth_hdr_t));
+
 		case 0x0806:
 			return net_arp_input(nif, data, len);
+
 		default:
 			dbglog(DBG_KDEBUG, "net_input: unhandled ethernet "
-			       "protocol: %x\n", ntohs(*proto));
+			       "protocol: %x\n", proto);
 			return 0;
 	}
 }
