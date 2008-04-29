@@ -122,7 +122,7 @@ int net_arp_lookup(netif_t *nif, uint8 ip_in[4], uint8 mac_out[6]) {
 	net_arp_query(nif, ip_in);
 
 	/* Return failure */
-	return -1;
+	return -2;
 }
 
 /* Do a reverse ARP lookup: look for an IP for a given mac address; note

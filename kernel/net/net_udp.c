@@ -399,7 +399,7 @@ ssize_t net_udp_send(net_socket_t *hnd, const void *message, size_t length,
                             udpsock->local_addr.sin_port,
                             udpsock->remote_addr.sin_addr.s_addr,
                             udpsock->remote_addr.sin_port, (uint8 *) message,
-                            length);
+                            length, udpsock->flags);
 }
 
 ssize_t net_udp_sendto(net_socket_t *hnd, const void *message, size_t length,
@@ -463,7 +463,7 @@ ssize_t net_udp_sendto(net_socket_t *hnd, const void *message, size_t length,
     return net_udp_send_raw(NULL, udpsock->local_addr.sin_addr.s_addr,
                             udpsock->local_addr.sin_port,
                             realaddr->sin_addr.s_addr, realaddr->sin_port,
-                            (uint8 *) message, length);
+                            (uint8 *) message, length, udpsock->flags);
 }
 
 int net_udp_shutdownsock(net_socket_t *hnd, int how) {
@@ -671,9 +671,10 @@ int net_udp_input(netif_t *src, ip_hdr_t *ip, const uint8 *data, int size) {
 
 int net_udp_send_raw(netif_t *net, uint32 src_ip, uint16 src_port,
                      uint32 dst_ip, uint16 dst_port, const uint8 *data,
-                     int size) {
+                     int size, int flags) {
     uint8 buf[size + 12 + sizeof(udp_hdr_t)];
     ip_pseudo_hdr_t *ps = (ip_pseudo_hdr_t *) buf;
+    int err;
 
     if(net == NULL && net_default_dev == NULL) {
         errno = ENETDOWN;
@@ -705,10 +706,23 @@ int net_udp_send_raw(netif_t *net, uint32 src_ip, uint16 src_port,
     ps->checksum = 0;
     ps->checksum = net_ipv4_checksum(buf, size + 12);
 
+retry_send:
     /* Pass everything off to the network layer to do the rest. */
-    if(net_ipv4_send(net, buf + 12, size, 0, 64, IPPROTO_UDP, ps->src_addr,
-                     ps->dst_addr)) {
-        /* If the packet send fails, errno will be set already. */
+    err = net_ipv4_send(net, buf + 12, size, 0, 64, IPPROTO_UDP, ps->src_addr,
+                        ps->dst_addr);
+    
+    /* If the IP layer returns that the ARP cache didn't have the entry for the
+       destination, sleep for a little bit, and try again (as long as the
+       non-blocking flag was not set). */
+    if(err == -2 && !(flags & O_NONBLOCK)) {
+        thd_sleep(100);
+        goto retry_send;
+    }
+    else if(err == -2) {
+        errno = ENETUNREACH;
+        return -1;
+    }
+    else if(err < 0) {
         return -1;
     }
     else {
