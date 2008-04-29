@@ -34,6 +34,7 @@ extern const char banner[];
 /* We have to put this here so we can include plat-specific devices */
 dbgio_handler_t * dbgio_handlers[] = {
 	&dbgio_dcload,
+    &dbgio_dcls,
 	&dbgio_scif,
 	&dbgio_null
 };
@@ -116,7 +117,21 @@ int arch_auto_init() {
 		old = dbgio_set_printk(dbgio_write_str);
 	} */
 	if (__kos_init_flags & INIT_NET) {
+        /* Check if the dcload-ip console is up, and if so, disable it,
+           otherwise we'll crash when we attempt to bring up the BBA */
+		if(!(__kos_init_flags & INIT_NO_DCLOAD) && dcload_type == DCLOAD_TYPE_IP) {
+			dbgio_dev_select("scif");
+		}
+
 		net_init();		/* Enable networking (and drivers) */
+
+        if(!(__kos_init_flags & INIT_NO_DCLOAD) && dcload_type == DCLOAD_TYPE_IP) {
+			fs_dclsocket_init_console();
+			if(!fs_dclsocket_init()) {
+				dbgio_dev_select("fs_dclsocket");
+				dbglog(DBG_INFO, "fs_dclsocket console support enabled\n");
+			}
+		}
 	}
 	/* if (!(__kos_init_flags & INIT_NO_DCLOAD) && *DCLOADMAGICADDR == DCLOADMAGICVALUE &&
 		(__kos_init_flags & INIT_NET))
@@ -131,13 +146,13 @@ int arch_auto_init() {
 }
 
 void arch_auto_shutdown() {
+    fs_dclsocket_shutdown();
+    net_shutdown();
+
 	irq_disable();
 	snd_shutdown();
 	timer_shutdown();
 	hardware_shutdown();
-	if (__kos_init_flags & INIT_NET) {
-		net_shutdown();
-	}
 	pvr_shutdown();
 	library_shutdown();
 	fs_dcload_shutdown();

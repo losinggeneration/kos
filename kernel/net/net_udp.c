@@ -231,7 +231,9 @@ ssize_t net_udp_recv(net_socket_t *hnd, void *buffer, size_t length, int flags) 
     }
 
     if(TAILQ_EMPTY(&udpsock->packets)) {
+        mutex_unlock(udp_mutex);
         genwait_wait(udpsock, "net_udp_recv", 0, NULL);
+        mutex_lock(udp_mutex);
     }
 
     pkt = TAILQ_FIRST(&udpsock->packets);
@@ -295,7 +297,9 @@ ssize_t net_udp_recvfrom(net_socket_t *hnd, void *buffer, size_t length,
     }
 
     while(TAILQ_EMPTY(&udpsock->packets)) {
+        mutex_unlock(udp_mutex);
         genwait_wait(udpsock, "net_udp_recvfrom", 0, NULL);
+        mutex_lock(udp_mutex);
     }
 
     pkt = TAILQ_FIRST(&udpsock->packets);
