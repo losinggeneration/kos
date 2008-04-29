@@ -80,6 +80,7 @@ int net_ipv4_send_packet(netif_t *net, ip_hdr_t *hdr, const uint8 *data,
     uint8 dest_mac[6];
     uint8 pkt[size + sizeof(ip_hdr_t) + sizeof(eth_hdr_t)];
     eth_hdr_t *ehdr;
+    int err;
 
     if(net == NULL) {
         net = net_default_dev;
@@ -104,10 +105,16 @@ int net_ipv4_send_packet(netif_t *net, ip_hdr_t *hdr, const uint8 *data,
         memcpy(dest_ip, net->gateway, 4);
     }
 
-    /* Get our destination's MAC address */
-    if(net_arp_lookup(net, dest_ip, dest_mac) == -1) {
+    /* Get our destination's MAC address. If we do not have the MAC address
+       cached, return a distinguished error to the upper-level protocol so
+       that it can decide what to do. */
+    err = net_arp_lookup(net, dest_ip, dest_mac);
+    if(err == -1) {
         errno = ENETUNREACH;
         return -1;
+    }
+    else if(err == -2) {
+        return -2;
     }
 
     /* Fill in the ethernet header */

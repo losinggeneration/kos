@@ -1,7 +1,7 @@
 /* KallistiOS ##version##
 
    kernel/net/net_udp.h
-   Copyright (C) 2005, 2006, 2007 Lawrence Sebald
+   Copyright (C) 2005, 2006, 2007, 2008 Lawrence Sebald
 
 */
 
@@ -23,7 +23,7 @@ typedef struct {
 int net_udp_input(netif_t *src, ip_hdr_t *ih, const uint8 *data, int size);
 int net_udp_send_raw(netif_t *net, uint32 src_ip, uint16 src_port,
                      uint32 dst_ip, uint16 dst_port, const uint8 *data,
-                     int size);
+                     int size, int flags);
 
 /* Sockets */
 int net_udp_accept(net_socket_t *hnd, struct sockaddr *addr,
