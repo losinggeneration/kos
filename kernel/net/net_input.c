@@ -29,8 +29,6 @@ static int net_default_input(netif_t *nif, const uint8 *data, int len) {
 			return net_arp_input(nif, data, len);
 
 		default:
-			dbglog(DBG_KDEBUG, "net_input: unhandled ethernet "
-			       "protocol: %x\n", proto);
 			return 0;
 	}
 }
