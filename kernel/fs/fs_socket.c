@@ -41,9 +41,26 @@ static void fs_socket_close(void *hnd) {
     free(sock);
 }
 
+static ssize_t fs_socket_read(void *hnd, void *buffer, size_t cnt) {
+    net_socket_t *sock = (net_socket_t *)hnd;
+
+    return net_udp_recv(sock, buffer, cnt, 0);
+}
+
+static off_t fs_socket_seek(void *hnd, off_t offset, int whence) {
+    errno = ESPIPE;
+    return (off_t) -1;
+}
+
 static off_t fs_socket_tell(void *hnd) {
     errno = ESPIPE;
     return (off_t) -1;
+}
+
+static ssize_t fs_socket_write(void *hnd, const void *buffer, size_t cnt) {
+    net_socket_t *sock = (net_socket_t *)hnd;
+
+    return net_udp_send(sock, buffer, cnt, 0);
 }
 
 /* VFS handler */
@@ -62,9 +79,9 @@ static vfs_handler_t vh = {
 
     NULL,            /* open */
     fs_socket_close, /* close */
-    NULL,            /* read */
-    NULL,            /* write */
-    NULL,            /* seek */
+    fs_socket_read,  /* read */
+    fs_socket_write, /* write */
+    fs_socket_seek,  /* seek */
     fs_socket_tell,  /* tell */
     NULL,            /* total */
     NULL,            /* readdir */
