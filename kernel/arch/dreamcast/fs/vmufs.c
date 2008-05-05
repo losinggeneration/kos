@@ -490,9 +490,9 @@ static int vmufs_setup(maple_device_t * dev, vmu_root_t * root, vmu_dir_t ** dir
 	/* Check to make sure this is a valid device right now */
 	if (!dev || !(dev->info.functions & MAPLE_FUNC_MEMCARD)) {
 		if (!dev)
-			dbglog(DBG_ERROR, "vmufs_readdir: device is invalid\n");
+			dbglog(DBG_ERROR, "vmufs_setup: device is invalid\n");
 		else
-			dbglog(DBG_ERROR, "vmufs_readdir: device %c%c is not a memory card\n",
+			dbglog(DBG_ERROR, "vmufs_setup: device %c%c is not a memory card\n",
 				dev->port+'A', dev->unit+'0');
 		return -1;
 	}
@@ -508,7 +508,7 @@ static int vmufs_setup(maple_device_t * dev, vmu_root_t * root, vmu_dir_t ** dir
 		*dirsize = vmufs_dir_blocks(root);
 		*dir = (vmu_dir_t *)malloc(*dirsize);
 		if (!*dir) {
-			dbglog(DBG_ERROR, "vmufs_readdir: can't alloc %d bytes for dir on device %c%c\n",
+			dbglog(DBG_ERROR, "vmufs_setup: can't alloc %d bytes for dir on device %c%c\n",
 				*dirsize, dev->port+'A', dev->unit+'0');
 			goto dead;
 		}
@@ -525,7 +525,7 @@ static int vmufs_setup(maple_device_t * dev, vmu_root_t * root, vmu_dir_t ** dir
 		*fatsize = vmufs_fat_blocks(root);
 		*fat = (uint16 *)malloc(*fatsize);
 		if (!*fat) {
-			dbglog(DBG_ERROR, "vmufs_readdir: can't alloc %d bytes for FAT on device %c%c\n",
+			dbglog(DBG_ERROR, "vmufs_setup: can't alloc %d bytes for FAT on device %c%c\n",
 				*fatsize, dev->port+'A', dev->unit+'0');
 			goto dead;
 		}
