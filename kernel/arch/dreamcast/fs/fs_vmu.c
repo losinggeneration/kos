@@ -298,7 +298,8 @@ static void vmu_close(void * hnd) {
 	switch (fh->strtype) {
 	case VMU_DIR: {
 		vmu_dh_t * dir = (vmu_dh_t *)hnd;
-		free(dir->dirblocks);
+		if (dir->dirblocks)
+			free(dir->dirblocks);
 		break;
 	}
 

@@ -588,7 +588,7 @@ int vmufs_readdir(maple_device_t * dev, vmu_dir_t ** outbuf, int * outcnt) {
 	/* Resize the buffer to match the number of entries */
 	*outcnt = dircnt;
 	*outbuf = (vmu_dir_t *)realloc(dir, dircnt * sizeof(vmu_dir_t));
-	if (!*outbuf) {
+	if (!*outbuf && dircnt) {
 		dbglog(DBG_ERROR, "vmufs_readdir: can't realloc %d bytes for dir on device %c%c\n",
 			dircnt * sizeof(vmu_dir_t), dev->port+'A', dev->unit+'0');
 		free(dir);
